@@ -1,7 +1,10 @@
-import { useCounter } from "./hooks/useCounter";
+import { useState } from "react";
 
 const App = () => {
-  const { count, increment, decrement } = useCounter();
+  const [count, setCount] = useState(0);
+
+  const increment = () => setCount((prev) => prev + 1);
+  const decrement = () => setCount((prev) => prev - 1);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">

@@ -1,12 +1,7 @@
+import { Match3Game } from "./components/Match3Game";
+
 const App = () => {
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">Match3 Game</h1>
-        <p className="text-gray-600">Game coming soon...</p>
-      </div>
-    </div>
-  );
+  return <Match3Game />;
 };
 
 export default App;

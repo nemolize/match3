@@ -1,6 +1,6 @@
-import { BOARD_SIZE, GEM_TYPES, MIN_MATCH_LENGTH } from "../constants/game";
-import type { Gem, GemType, Match, Position } from "../types/game";
-import { findMatches as detectMatches } from "./matchDetection";
+import { BOARD_SIZE, GEM_TYPES, MIN_MATCH_LENGTH } from "@/constants/game";
+import type { Gem, GemType, Match, Position } from "@/types/game";
+import { findMatches as detectMatches } from "@/utils/matchDetection";
 
 export const generateId = (): string => {
   return Math.random().toString(36).substr(2, 9);

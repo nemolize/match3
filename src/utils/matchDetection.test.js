@@ -4,7 +4,7 @@ import {
   findMatches,
   findVerticalMatches,
   removeDuplicateMatches,
-} from "./matchDetection";
+} from "@/utils/matchDetection";
 
 // Helper function to create a gem
 const createGem = (type, row, col) => ({

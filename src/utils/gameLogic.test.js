@@ -9,7 +9,7 @@ import {
   isValidSwap,
   removeMatches,
   swapGems,
-} from "./gameLogic";
+} from "@/utils/gameLogic";
 
 // Helper function to create a gem
 const createGem = (type, row, col) => ({

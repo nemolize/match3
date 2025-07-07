@@ -1,5 +1,5 @@
-import { GEM_COLORS, GEM_STYLES } from "../constants/game";
-import type { Gem, Position } from "../types/game";
+import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
+import type { Gem, Position } from "@/types/game";
 
 interface GemComponentProps {
   gem: Gem;

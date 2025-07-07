@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { GameState, Gem, Position } from "../types/game";
+import type { GameState, Gem, Position } from "@/types/game";
 import {
   applyGravity,
   createInitialBoard,
@@ -9,7 +9,7 @@ import {
   isValidSwap,
   removeMatches,
   swapGems,
-} from "../utils/gameLogic";
+} from "@/utils/gameLogic";
 
 const initialGameState: GameState = {
   board: createInitialBoard(),

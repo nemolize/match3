@@ -1,7 +1,7 @@
 import { useGesture } from "@use-gesture/react";
-import { BOARD_SIZE, SWIPE_THRESHOLD } from "../constants/game";
-import type { Gem, Match, Position } from "../types/game";
-import { GemComponent } from "./GemComponent";
+import { GemComponent } from "@/components/GemComponent";
+import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
+import type { Gem, Match, Position } from "@/types/game";
 
 interface GameBoardProps {
   board: (Gem | null)[][];

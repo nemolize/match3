@@ -1,5 +1,5 @@
-import { BOARD_SIZE, MIN_MATCH_LENGTH } from "../constants/game";
-import type { Gem, GemType, Match, Position } from "../types/game";
+import { BOARD_SIZE, MIN_MATCH_LENGTH } from "@/constants/game";
+import type { Gem, GemType, Match, Position } from "@/types/game";
 
 /**
  * Finds all horizontal matches of 3 or more consecutive gems

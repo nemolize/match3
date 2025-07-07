@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { useMatch3Game } from "../hooks/useMatch3Game";
-import { GameBoard } from "./GameBoard";
-import { GameHeader } from "./GameHeader";
+import { GameBoard } from "@/components/GameBoard";
+import { GameHeader } from "@/components/GameHeader";
+import { useMatch3Game } from "@/hooks/useMatch3Game";
 
 export const Match3Game = () => {
   const { gameState, handleSwipe, newGame } = useMatch3Game();

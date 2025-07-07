@@ -82,9 +82,9 @@ describe("Game Logic", () => {
             const gem1 = board[row][col];
             const gem2 = board[row][col + 1];
             const gem3 = board[row][col + 2];
-            expect(
-              gem1.type === gem2.type && gem2.type === gem3.type
-            ).toBe(false);
+            expect(gem1.type === gem2.type && gem2.type === gem3.type).toBe(
+              false,
+            );
           }
         }
         // Check no vertical matches
@@ -93,9 +93,9 @@ describe("Game Logic", () => {
             const gem1 = board[row][col];
             const gem2 = board[row + 1][col];
             const gem3 = board[row + 2][col];
-            expect(
-              gem1.type === gem2.type && gem2.type === gem3.type
-            ).toBe(false);
+            expect(gem1.type === gem2.type && gem2.type === gem3.type).toBe(
+              false,
+            );
           }
         }
       }
@@ -160,7 +160,7 @@ describe("Game Logic", () => {
       const isValid = isValidSwap(
         board,
         { row: 0, col: 0 },
-        { row: 0, col: 1 }
+        { row: 0, col: 1 },
       );
 
       expect(isValid).toBe(true);
@@ -187,7 +187,7 @@ describe("Game Logic", () => {
       const isValid = isValidSwap(
         board,
         { row: 0, col: 0 },
-        { row: 1, col: 0 }
+        { row: 1, col: 0 },
       );
 
       expect(isValid).toBe(true);
@@ -203,7 +203,7 @@ describe("Game Logic", () => {
       const isValid = isValidSwap(
         board,
         { row: 0, col: 0 },
-        { row: 0, col: 1 }
+        { row: 0, col: 1 },
       );
 
       expect(isValid).toBe(false);
@@ -217,7 +217,7 @@ describe("Game Logic", () => {
       const isValid = isValidSwap(
         board,
         { row: 0, col: 0 },
-        { row: 0, col: 2 }
+        { row: 0, col: 2 },
       );
 
       expect(isValid).toBe(false);
@@ -373,7 +373,7 @@ describe("Game Logic", () => {
           board[row][col] = createGem(
             (row + col) % 2 === 0 ? "green" : "yellow",
             row,
-            col
+            col,
           );
         }
       }

@@ -14,7 +14,7 @@ export const GameHeader = ({
   onNewGame,
 }: GameHeaderProps) => {
   return (
-    <div className="flex justify-between items-center mb-6 px-4">
+    <div className="mb-6 flex items-center justify-between px-4">
       {/* Score */}
       <motion.div
         className="text-center"
@@ -22,9 +22,9 @@ export const GameHeader = ({
         animate={{ scale: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="text-sm font-medium text-gray-300 mb-1">Score</div>
+        <div className="mb-1 text-sm font-medium text-gray-300">Score</div>
         <motion.div
-          className="text-2xl font-bold text-white bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent"
+          className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-2xl font-bold text-transparent text-white"
           key={score}
           initial={{ scale: 1.2 }}
           animate={{ scale: 1 }}
@@ -41,15 +41,15 @@ export const GameHeader = ({
         animate={{ scale: 1 }}
         transition={{ delay: 0.3 }}
       >
-        <div className="text-sm font-medium text-gray-300 mb-1">Level</div>
-        <div className="text-2xl font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+        <div className="mb-1 text-sm font-medium text-gray-300">Level</div>
+        <div className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-2xl font-bold text-transparent text-white">
           {level}
         </div>
       </motion.div>
 
       {/* New Game Button */}
       <motion.button
-        className="px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200"
+        className="rounded-lg bg-gradient-to-r from-green-500 to-teal-500 px-4 py-2 font-semibold text-white shadow-lg transition-all duration-200 hover:shadow-xl active:scale-95"
         onClick={onNewGame}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -62,14 +62,14 @@ export const GameHeader = ({
       {/* Game Over Overlay */}
       {gameOver && (
         <motion.div
-          className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl"
+          className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
           <div className="text-center">
             <motion.div
-              className="text-3xl font-bold text-white mb-4"
+              className="mb-4 text-3xl font-bold text-white"
               initial={{ scale: 0, y: -20 }}
               animate={{ scale: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -77,7 +77,7 @@ export const GameHeader = ({
               Game Over!
             </motion.div>
             <motion.div
-              className="text-xl text-gray-300 mb-6"
+              className="mb-6 text-xl text-gray-300"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
@@ -85,7 +85,7 @@ export const GameHeader = ({
               Final Score: {score.toLocaleString()}
             </motion.div>
             <motion.button
-              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200"
+              className="rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:shadow-xl active:scale-95"
               onClick={onNewGame}
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}

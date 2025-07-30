@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
 import { useMatch3Game } from "@/hooks/useMatch3Game";
@@ -7,9 +8,9 @@ export const Match3Game = () => {
   const { gameState, handleSwipe, newGame } = useMatch3Game();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
       <motion.div
-        className="w-full max-w-md relative"
+        className="relative w-full max-w-md"
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
@@ -32,7 +33,7 @@ export const Match3Game = () => {
 
         {/* Instructions */}
         <motion.div
-          className="mt-6 text-center text-white/80 text-sm"
+          className="mt-6 text-center text-sm text-white/80"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}

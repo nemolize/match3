@@ -25,17 +25,7 @@ export const GemComponent = ({
     <button
       type="button"
       key={gem.id}
-      className={`
-        relative w-full h-full rounded-lg cursor-pointer select-none
-        ${gemColorClass}
-        ${gemShadowClass}
-        ${isSelected ? "ring-4 ring-white ring-opacity-80 scale-105" : ""}
-        ${isMatched ? "opacity-30 scale-75" : ""}
-        shadow-lg
-        active:scale-95
-        hover:brightness-110
-        transition-all duration-200
-      `}
+      className={`relative h-full w-full cursor-pointer rounded-lg select-none ${gemColorClass} ${gemShadowClass} ${isSelected ? "ring-opacity-80 scale-105 ring-4 ring-white" : ""} ${isMatched ? "scale-75 opacity-30" : ""} shadow-lg transition-all duration-200 hover:brightness-110 active:scale-95`}
       onClick={handleClick}
     >
       {/* Gem highlight effect */}
@@ -43,7 +33,7 @@ export const GemComponent = ({
 
       {/* Gem icon/symbol */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-4 h-4 bg-white/40 rounded-full" />
+        <div className="h-4 w-4 rounded-full bg-white/40" />
       </div>
 
       {/* Selection indicator */}

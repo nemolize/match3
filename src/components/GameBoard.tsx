@@ -1,4 +1,5 @@
 import { useGesture } from "@use-gesture/react";
+
 import { GemComponent } from "@/components/GemComponent";
 import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
 import type { Gem, Match, Position } from "@/types/game";
@@ -26,7 +27,9 @@ export const GameBoard = ({
     onDrag: ({ args, movement: [mx, my], last }) => {
       if (isAnimating || !last) return;
 
-      const [row, col] = args as [number, number];
+      if (!Array.isArray(args) || args.length !== 2) return;
+      const [row, col] = args;
+      if (typeof row !== "number" || typeof col !== "number") return;
       const from = { row, col };
 
       // Calculate swipe direction
@@ -61,22 +64,22 @@ export const GameBoard = ({
   });
 
   return (
-    <div className="relative bg-gray-800 rounded-2xl p-4 shadow-2xl">
+    <div className="relative rounded-2xl bg-gray-800 p-4 shadow-2xl">
       {/* Board grid */}
       <div
-        className="grid grid-cols-8 gap-1 aspect-square w-full max-w-sm mx-auto"
+        className="mx-auto grid aspect-square w-full max-w-sm grid-cols-8 gap-1"
         style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
       >
         {board.map((row, rowIndex) =>
           row.map((gem, colIndex) => (
             <div
               key={gem ? `gem-${gem.id}` : `empty-${rowIndex}-${colIndex}`}
-              className="aspect-square bg-gray-700 rounded-lg p-1"
+              className="aspect-square rounded-lg bg-gray-700 p-1"
             >
               {gem && (
                 <div
                   {...bind(rowIndex, colIndex)}
-                  className="w-full h-full touch-none"
+                  className="h-full w-full touch-none"
                   style={{ touchAction: "none" }}
                 >
                   <GemComponent
@@ -94,7 +97,7 @@ export const GameBoard = ({
 
       {/* Animation overlay */}
       {isAnimating && (
-        <div className="absolute inset-0 bg-black/10 rounded-2xl transition-opacity duration-200" />
+        <div className="absolute inset-0 rounded-2xl bg-black/10 transition-opacity duration-200" />
       )}
     </div>
   );

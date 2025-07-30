@@ -1,7 +1,6 @@
-import { twMerge } from "tailwind-merge";
-
 import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
 import type { Gem, Position } from "@/types/game";
+import { cn } from "@/utils/cn";
 
 interface GemComponentProps {
   gem: Gem;
@@ -27,7 +26,7 @@ export const GemComponent = ({
     <button
       type="button"
       key={gem.id}
-      className={twMerge(
+      className={cn(
         "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-all duration-200 select-none hover:brightness-110 active:scale-95",
         gemColorClass,
         gemShadowClass,

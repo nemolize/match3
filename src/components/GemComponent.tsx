@@ -1,3 +1,5 @@
+import { twMerge } from "tailwind-merge";
+
 import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
 import type { Gem, Position } from "@/types/game";
 
@@ -25,7 +27,13 @@ export const GemComponent = ({
     <button
       type="button"
       key={gem.id}
-      className={`relative h-full w-full cursor-pointer rounded-lg select-none ${gemColorClass} ${gemShadowClass} ${isSelected ? "ring-opacity-80 scale-105 ring-4 ring-white" : ""} ${isMatched ? "scale-75 opacity-30" : ""} shadow-lg transition-all duration-200 hover:brightness-110 active:scale-95`}
+      className={twMerge(
+        "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-all duration-200 select-none hover:brightness-110 active:scale-95",
+        gemColorClass,
+        gemShadowClass,
+        isSelected && "ring-opacity-80 scale-105 ring-4 ring-white",
+        isMatched && "scale-75 opacity-30",
+      )}
       onClick={handleClick}
     >
       {/* Gem highlight effect */}

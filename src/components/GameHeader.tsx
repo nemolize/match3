@@ -24,7 +24,7 @@ export const GameHeader = ({
       >
         <div className="mb-1 text-sm font-medium text-gray-300">Score</div>
         <motion.div
-          className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-2xl font-bold text-transparent text-white"
+          className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-2xl font-bold text-transparent"
           key={score}
           initial={{ scale: 1.2 }}
           animate={{ scale: 1 }}

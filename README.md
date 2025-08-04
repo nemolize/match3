@@ -17,7 +17,7 @@ A modern match-3 puzzle game built with React, TypeScript, and Vite. Features sm
 - **Framer Motion** for smooth animations
 - **@use-gesture/react** for touch gesture handling
 - **Vite** for fast development and building
-- **Biome** for linting and formatting
+- **ESLint** and **Prettier** for linting and formatting
 - **Vitest** for unit testing with Testing Library
 - **Playwright** for end-to-end testing
 - **Renovate** for automated dependency updates

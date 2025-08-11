@@ -21,6 +21,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
+      - uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            Preview URL(${{ github.sha }}): deployment is in progress...
+
       - run: pnpm run build
 
       - id: deploy
@@ -35,4 +40,4 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           message: |
-            Preview URL: ${{ steps.deploy.outputs.deployment-url }}
+            Preview URL(${{ github.sha }}): ${{ steps.deploy.outputs.deployment-url }}

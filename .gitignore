@@ -21,3 +21,5 @@
 
 # playwright
 /test-results/
+
+.wrangler/

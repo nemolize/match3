@@ -18,13 +18,13 @@ jobs:
   Deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-
       - uses: marocchino/sticky-pull-request-comment@v2
         with:
           message: |
-            Preview URL(${{ github.sha }}): deployment is in progress...
+            Preview URL: ⏳ deployment is in progress...
+
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
 
       - run: pnpm run build
 
@@ -40,4 +40,4 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           message: |
-            Preview URL(${{ github.sha }}): ${{ steps.deploy.outputs.deployment-url }}
+            Preview URL: ${{ steps.deploy.outputs.deployment-url }}

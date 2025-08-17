@@ -20,8 +20,7 @@ jobs:
     steps:
       - uses: marocchino/sticky-pull-request-comment@v2
         with:
-          message: |
-            Preview URL: ⏳ deployment is in progress...
+          message: "Preview URL: ⏳ deployment is in progress..."
 
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -39,5 +38,4 @@ jobs:
         name: Post preview URL comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          message: |
-            Preview URL: ${{ steps.deploy.outputs.deployment-url }}
+          message: "Preview URL: ${{ steps.deploy.outputs.deployment-url }}"

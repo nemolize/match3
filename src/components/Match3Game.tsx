@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";

@@ -88,6 +88,7 @@ export const GameBoard = ({
           row.map((gem, colIndex) => {
             const positionKey = `${rowIndex}-${colIndex}`;
             const isMatched = matchedPositions.has(positionKey);
+            const gestureHandlers = bind(rowIndex, colIndex);
 
             return (
               <motion.div
@@ -99,31 +100,35 @@ export const GameBoard = ({
               >
                 <AnimatePresence mode="popLayout">
                   {gem && (
-                    <motion.div
-                      key={gem.id}
-                      {...bind(rowIndex, colIndex)}
+                    <div
+                      {...gestureHandlers}
                       className="h-full w-full touch-none"
                       style={{ touchAction: "none" }}
-                      layout
-                      layoutId={`gem-${gem.id}`}
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{
-                        scale: isMatched ? 0.6 : 1,
-                        opacity: isMatched ? 0.25 : 1,
-                        rotateX: isMatched ? 18 : 0,
-                      }}
-                      exit={{ scale: 0.4, opacity: 0 }}
-                      transition={gemSpring}
-                      whileHover={isAnimating ? undefined : { scale: 1.05 }}
-                      whileTap={isAnimating ? undefined : { scale: 0.95 }}
                     >
-                      <GemComponent
-                        gem={gem}
-                        isSelected={false}
-                        isMatched={isMatched}
-                        onClick={() => {}}
-                      />
-                    </motion.div>
+                      <motion.div
+                        key={gem.id}
+                        className="h-full w-full"
+                        layout
+                        layoutId={`gem-${gem.id}`}
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{
+                          scale: isMatched ? 0.6 : 1,
+                          opacity: isMatched ? 0.25 : 1,
+                          rotateX: isMatched ? 18 : 0,
+                        }}
+                        exit={{ scale: 0.4, opacity: 0 }}
+                        transition={gemSpring}
+                        whileHover={isAnimating ? undefined : { scale: 1.05 }}
+                        whileTap={isAnimating ? undefined : { scale: 0.95 }}
+                      >
+                        <GemComponent
+                          gem={gem}
+                          isSelected={false}
+                          isMatched={isMatched}
+                          onClick={() => {}}
+                        />
+                      </motion.div>
+                    </div>
                   )}
                 </AnimatePresence>
               </motion.div>

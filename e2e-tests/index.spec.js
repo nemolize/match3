@@ -17,7 +17,7 @@ test("should load the match3 game page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "New Game" })).toBeVisible();
 
   // Check that the game board is present (grid of gems)
-  const gameBoard = page.locator(".grid-cols-8");
+  const gameBoard = page.getByRole("grid");
   await expect(gameBoard).toBeVisible();
 
   // Check that instructions are present
@@ -29,7 +29,7 @@ test("should load the match3 game page", async ({ page }) => {
   ).toBeVisible();
 
   // Test that gems are swipeable
-  const firstGem = page.locator(".grid-cols-8 > div").first();
+  const firstGem = page.getByRole("gridcell").first();
   await firstGem.hover();
 
   // Test new game functionality

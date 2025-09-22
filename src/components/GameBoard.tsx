@@ -79,7 +79,10 @@ export const GameBoard = ({
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
       <motion.div
+        aria-colcount={BOARD_SIZE}
+        aria-rowcount={BOARD_SIZE}
         className="mx-auto grid aspect-square w-full max-w-sm gap-1"
+        role="grid"
         style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
         layout
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
@@ -92,8 +95,11 @@ export const GameBoard = ({
 
             return (
               <motion.div
+                aria-colindex={colIndex + 1}
+                aria-rowindex={rowIndex + 1}
                 key={positionKey}
                 className="aspect-square rounded-lg bg-gray-700/80 p-1"
+                role="gridcell"
                 layout
                 transition={{ type: "spring", stiffness: 260, damping: 28 }}
                 whileHover={{ scale: 1.02 }}

@@ -15,7 +15,8 @@
     "fix:eslint": "eslint . --fix",
     "fix:prettier": "prettier --write .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.13.1",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { GameState, Gem, Position } from "@/types/game";
 import {
@@ -100,27 +100,21 @@ export const useMatch3Game = () => {
           board: newBoard,
           isAnimating: false,
         }));
+
+        // Process any matches resulting from the swap
+        await processMatches(newBoard, gameState.score);
       }
     },
-    [gameState.isAnimating, gameState.gameOver, gameState.board],
+    [gameState, processMatches],
   );
 
   const newGame = useCallback(() => {
-    setGameState({
-      ...initialGameState,
-      board: createInitialBoard(),
-    });
-  }, []);
-
-  // Process matches when board changes
-  useEffect(() => {
-    if (!gameState.isAnimating) {
-      const matches = findMatches(gameState.board);
-      if (matches.length > 0) {
-        processMatches(gameState.board, gameState.score);
-      }
-    }
-  }, [gameState.board, gameState.isAnimating, gameState.score, processMatches]);
+    const newBoard = createInitialBoard();
+    setGameState({ ...initialGameState, board: newBoard });
+    // Process any initial matches on the new board
+    const matches = findMatches(newBoard);
+    if (matches.length > 0) processMatches(newBoard, initialGameState.score);
+  }, [processMatches]);
 
   return {
     gameState,

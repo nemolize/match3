@@ -7,7 +7,7 @@ test("should load the match3 game page", async ({ page }) => {
   await expect(page).toHaveTitle("Match3 Puzzle Game");
 
   // Wait for the game to load
-  await page.waitForTimeout(1000);
+  await page.waitForLoadState("networkidle");
 
   // Check that the score display is present
   await expect(page.getByText("Score").first()).toBeVisible();

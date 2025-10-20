@@ -1,10 +1,11 @@
 import { useGesture } from "@use-gesture/react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { GemComponent } from "@/components/GemComponent";
+import { GemParticles } from "@/components/GemParticles";
 import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
-import type { Gem, Match, Position } from "@/types/game";
+import type { Gem, GemType, Match, Position } from "@/types/game";
 
 interface GameBoardProps {
   board: (Gem | null)[][];
@@ -20,12 +21,24 @@ const gemSpring = {
   mass: 0.6,
 };
 
+interface BreakingGem {
+  id: string;
+  type: GemType;
+  x: number;
+  y: number;
+  size: number;
+}
+
 export const GameBoard = ({
   board,
   matches,
   onSwipe,
   isAnimating,
 }: GameBoardProps) => {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [breakingGems, setBreakingGems] = useState<BreakingGem[]>([]);
+  const prevMatchesRef = useRef<Match[]>([]);
+
   const matchedPositions = useMemo(
     () =>
       new Set(
@@ -35,6 +48,64 @@ export const GameBoard = ({
       ),
     [matches],
   );
+
+  // Detect new matches and create breaking gem particles
+  useEffect(() => {
+    if (!boardRef.current) return;
+
+    // Check if we have new matches
+    const newMatchPositions = matches.flatMap((match) => match.positions);
+    const prevMatchPositions = prevMatchesRef.current.flatMap(
+      (match) => match.positions,
+    );
+
+    const hasNewMatches =
+      newMatchPositions.length > 0 &&
+      (prevMatchPositions.length !== newMatchPositions.length ||
+        !newMatchPositions.every((pos, i) =>
+          prevMatchPositions[i]
+            ? pos.row === prevMatchPositions[i].row &&
+              pos.col === prevMatchPositions[i].col
+            : false,
+        ));
+
+    if (hasNewMatches) {
+      const boardRect = boardRef.current.getBoundingClientRect();
+      const cellSize = boardRect.width / BOARD_SIZE;
+
+      const newBreakingGems: BreakingGem[] = [];
+
+      matches.forEach((match) => {
+        match.positions.forEach((pos) => {
+          const gem = board[pos.row]?.[pos.col];
+          if (gem) {
+            // Calculate pixel position relative to the board
+            const x = pos.col * cellSize;
+            const y = pos.row * cellSize;
+
+            newBreakingGems.push({
+              id: `breaking-${gem.id}-${Date.now()}`,
+              type: gem.type,
+              x,
+              y,
+              size: cellSize,
+            });
+          }
+        });
+      });
+
+      // Use setTimeout to avoid calling setState synchronously in effect
+      setTimeout(() => {
+        setBreakingGems((prev) => [...prev, ...newBreakingGems]);
+      }, 0);
+    }
+
+    prevMatchesRef.current = matches;
+  }, [matches, board]);
+
+  const handleParticleComplete = (id: string) => {
+    setBreakingGems((prev) => prev.filter((gem) => gem.id !== id));
+  };
 
   const bind = useGesture({
     onDrag: ({ args, movement: [mx, my], last }) => {
@@ -79,6 +150,7 @@ export const GameBoard = ({
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
       <motion.div
+        ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
         className="mx-auto grid aspect-square w-full max-w-sm gap-1"
@@ -142,6 +214,18 @@ export const GameBoard = ({
           }),
         )}
       </motion.div>
+
+      {/* Particle effects for breaking gems */}
+      {breakingGems.map((breakingGem) => (
+        <GemParticles
+          key={breakingGem.id}
+          gemType={breakingGem.type}
+          x={breakingGem.x}
+          y={breakingGem.y}
+          size={breakingGem.size}
+          onComplete={() => handleParticleComplete(breakingGem.id)}
+        />
+      ))}
 
       <AnimatePresence>
         {isAnimating && (

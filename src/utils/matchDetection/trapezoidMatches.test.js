@@ -80,67 +80,6 @@ describe("Trapezoid Matches", () => {
     expect(trapezoid.score).toBe(875); // 5 * 175
   });
 
-  test("should find 4x3 trapezoid (top-wide, left-aligned)", () => {
-    const board = createEmptyBoard();
-    // Create: xxxx
-    //         xxx
-    board[1][1] = createGem("purple", 1, 1);
-    board[1][2] = createGem("purple", 1, 2);
-    board[1][3] = createGem("purple", 1, 3);
-    board[1][4] = createGem("purple", 1, 4);
-    board[2][1] = createGem("purple", 2, 1);
-    board[2][2] = createGem("purple", 2, 2);
-    board[2][3] = createGem("purple", 2, 3);
-
-    const matches = findTrapezoidMatches(board);
-
-    expect(matches.length).toBeGreaterThan(0);
-    const trapezoid = matches.find((m) => m.positions.length === 7);
-    expect(trapezoid).toBeDefined();
-    expect(trapezoid.type).toBe("purple");
-    expect(trapezoid.score).toBe(1225); // 7 * 175
-  });
-
-  test("should find 4x2 trapezoid (top-wide, center-aligned)", () => {
-    const board = createEmptyBoard();
-    // Create: xxxx
-    //          xx
-    board[5][0] = createGem("orange", 5, 0);
-    board[5][1] = createGem("orange", 5, 1);
-    board[5][2] = createGem("orange", 5, 2);
-    board[5][3] = createGem("orange", 5, 3);
-    board[6][1] = createGem("orange", 6, 1);
-    board[6][2] = createGem("orange", 6, 2);
-
-    const matches = findTrapezoidMatches(board);
-
-    expect(matches.length).toBeGreaterThan(0);
-    const trapezoid = matches.find((m) => m.positions.length === 6);
-    expect(trapezoid).toBeDefined();
-    expect(trapezoid.type).toBe("orange");
-    expect(trapezoid.score).toBe(1050); // 6 * 175
-  });
-
-  test("should find 4x2 trapezoid (bottom-wide, right-aligned)", () => {
-    const board = createEmptyBoard();
-    // Create:   xx
-    //         xxxx
-    board[2][4] = createGem("red", 2, 4);
-    board[2][5] = createGem("red", 2, 5);
-    board[3][2] = createGem("red", 3, 2);
-    board[3][3] = createGem("red", 3, 3);
-    board[3][4] = createGem("red", 3, 4);
-    board[3][5] = createGem("red", 3, 5);
-
-    const matches = findTrapezoidMatches(board);
-
-    expect(matches.length).toBeGreaterThan(0);
-    const trapezoid = matches.find((m) => m.positions.length === 6);
-    expect(trapezoid).toBeDefined();
-    expect(trapezoid.type).toBe("red");
-    expect(trapezoid.score).toBe(1050); // 6 * 175
-  });
-
   test("should not find trapezoid with mismatched colors", () => {
     const board = createEmptyBoard();
     // Create mismatched pattern

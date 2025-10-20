@@ -206,4 +206,44 @@ describe("Trapezoid Matches", () => {
 
     expect(matches).toHaveLength(0);
   });
+
+  test("should find vertical trapezoid pattern (1-2-2, left-aligned)", () => {
+    const board = createEmptyBoard();
+    // Create:  x
+    //          xx
+    //          xx
+    board[0][0] = createGem("red", 0, 0);
+    board[1][0] = createGem("red", 1, 0);
+    board[1][1] = createGem("red", 1, 1);
+    board[2][0] = createGem("red", 2, 0);
+    board[2][1] = createGem("red", 2, 1);
+
+    const matches = findTrapezoidMatches(board);
+
+    expect(matches.length).toBeGreaterThan(0);
+    const trapezoid = matches.find((m) => m.positions.length === 5);
+    expect(trapezoid).toBeDefined();
+    expect(trapezoid.type).toBe("red");
+    expect(trapezoid.score).toBe(875); // 5 * 175
+  });
+
+  test("should find vertical trapezoid pattern (1-2-2, right-aligned)", () => {
+    const board = createEmptyBoard();
+    // Create:   x
+    //          xx
+    //          xx
+    board[0][1] = createGem("blue", 0, 1);
+    board[1][0] = createGem("blue", 1, 0);
+    board[1][1] = createGem("blue", 1, 1);
+    board[2][0] = createGem("blue", 2, 0);
+    board[2][1] = createGem("blue", 2, 1);
+
+    const matches = findTrapezoidMatches(board);
+
+    expect(matches.length).toBeGreaterThan(0);
+    const trapezoid = matches.find((m) => m.positions.length === 5);
+    expect(trapezoid).toBeDefined();
+    expect(trapezoid.type).toBe("blue");
+    expect(trapezoid.score).toBe(875); // 5 * 175
+  });
 });

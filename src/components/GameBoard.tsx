@@ -71,7 +71,21 @@ export const GameBoard = ({
 
     if (hasNewMatches) {
       const boardRect = boardRef.current.getBoundingClientRect();
-      const cellSize = boardRect.width / BOARD_SIZE;
+
+      // Get the actual gap size from computed styles
+      const boardStyle = window.getComputedStyle(boardRef.current);
+      const gapSize = parseFloat(boardStyle.gap) || 0;
+
+      // Calculate actual cell size accounting for gaps
+      const actualCellSize =
+        (boardRect.width - gapSize * (BOARD_SIZE - 1)) / BOARD_SIZE;
+
+      // Get the board's offset from its parent (accounts for p-4 padding on parent)
+      const boardOffsetLeft = boardRef.current.offsetLeft;
+      const boardOffsetTop = boardRef.current.offsetTop;
+
+      // Cell padding (p-1 = 4px)
+      const cellPadding = 4;
 
       const newBreakingGems: BreakingGem[] = [];
 
@@ -79,16 +93,20 @@ export const GameBoard = ({
         match.positions.forEach((pos) => {
           const gem = board[pos.row]?.[pos.col];
           if (gem) {
-            // Calculate pixel position relative to the board
-            const x = pos.col * cellSize;
-            const y = pos.row * cellSize;
+            // Calculate pixel position relative to the parent container
+            // accounting for: board offset, grid gaps, and cell padding
+            const x = boardOffsetLeft + pos.col * (actualCellSize + gapSize);
+            const y = boardOffsetTop + pos.row * (actualCellSize + gapSize);
+
+            // Size is cell size minus padding on both sides
+            const gemSize = actualCellSize - cellPadding * 2;
 
             newBreakingGems.push({
               id: `breaking-${gem.id}-${Date.now()}`,
               type: gem.type,
               x,
               y,
-              size: cellSize,
+              size: gemSize,
             });
           }
         });

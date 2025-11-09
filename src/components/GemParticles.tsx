@@ -35,6 +35,7 @@ const GEM_COLORS: Record<GemType, string> = {
 
 const GRAVITY = 0.5;
 const INITIAL_VELOCITY_RANGE = 5;
+const CELL_PADDING = 4; // p-1 = 4px padding from the cell
 
 export const GemParticles = ({
   gemType,
@@ -51,8 +52,8 @@ export const GemParticles = ({
 
       return {
         id: `particle-${i}`,
-        x: x + size / 2,
-        y: y + size / 2,
+        x: x + CELL_PADDING + size / 2,
+        y: y + CELL_PADDING + size / 2,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed - 2, // Slight upward bias
         rotation: Math.random() * 360,
@@ -108,8 +109,8 @@ export const GemParticles = ({
           key={particle.id}
           className="absolute rounded-sm"
           style={{
-            left: particle.x,
-            top: particle.y,
+            left: particle.x - particle.size / 2,
+            top: particle.y - particle.size / 2,
             width: particle.size,
             height: particle.size,
             backgroundColor: color,

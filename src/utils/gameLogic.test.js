@@ -142,6 +142,17 @@ describe("Game Logic", () => {
       expect(board[0][0]).toBe(originalGem1);
       expect(board[0][1]).toBe(originalGem2);
     });
+
+    test("should not mutate the original gems' positions", () => {
+      const board = createEmptyBoard();
+      board[0][0] = createGem("red", 0, 0);
+      board[0][1] = createGem("blue", 0, 1);
+
+      swapGems(board, { row: 0, col: 0 }, { row: 0, col: 1 });
+
+      expect(board[0][0].position).toEqual({ row: 0, col: 0 });
+      expect(board[0][1].position).toEqual({ row: 0, col: 1 });
+    });
   });
 
   describe("isValidSwap", () => {
@@ -222,6 +233,21 @@ describe("Game Logic", () => {
       );
 
       expect(isValid).toBe(false);
+    });
+
+    test("should not mutate the board while simulating the swap", () => {
+      const board = createEmptyBoard();
+      board[0][0] = createGem("red", 0, 0);
+      board[0][1] = createGem("blue", 0, 1);
+      const originalGem1 = board[0][0];
+      const originalGem2 = board[0][1];
+
+      isValidSwap(board, { row: 0, col: 0 }, { row: 0, col: 1 });
+
+      expect(board[0][0]).toBe(originalGem1);
+      expect(board[0][1]).toBe(originalGem2);
+      expect(board[0][0].position).toEqual({ row: 0, col: 0 });
+      expect(board[0][1].position).toEqual({ row: 0, col: 1 });
     });
   });
 

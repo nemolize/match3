@@ -150,6 +150,127 @@ describe("useMatch3Game", () => {
     expect(result.current.gameState.level).toBe(1);
   });
 
+  describe("handleGemTap state machine", () => {
+    test("first tap on an empty selection selects that gem", () => {
+      const { result } = renderHook(() => useMatch3Game());
+
+      act(() => {
+        result.current.handleGemTap({ row: 3, col: 4 });
+      });
+
+      expect(result.current.gameState.selectedGem).toEqual({ row: 3, col: 4 });
+    });
+
+    test("tapping the currently-selected gem again clears the selection", () => {
+      const { result } = renderHook(() => useMatch3Game());
+
+      act(() => {
+        result.current.handleGemTap({ row: 3, col: 4 });
+      });
+      act(() => {
+        result.current.handleGemTap({ row: 3, col: 4 });
+      });
+
+      expect(result.current.gameState.selectedGem).toBeNull();
+    });
+
+    test("tapping an adjacent gem attempts a swap and clears the selection", async () => {
+      vi.mocked(gameLogic.isValidSwap).mockReturnValue(true);
+      const { result } = renderHook(() => useMatch3Game());
+
+      await act(async () => {
+        result.current.handleGemTap({ row: 0, col: 0 });
+        await Promise.resolve();
+      });
+      const beforeSwapCalls = vi.mocked(gameLogic.isValidSwap).mock.calls
+        .length;
+
+      await act(async () => {
+        result.current.handleGemTap({ row: 0, col: 1 });
+        await Promise.resolve();
+      });
+
+      // The swap runs through handleSwipe → isValidSwap
+      expect(
+        vi.mocked(gameLogic.isValidSwap).mock.calls.length,
+      ).toBeGreaterThan(beforeSwapCalls);
+      // And swapAndWait clears the selection as a side effect
+      expect(result.current.gameState.selectedGem).toBeNull();
+
+      // Drain the swap animation so the test does not leave a timer running
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+    });
+
+    test("tapping a non-adjacent gem moves the selection", () => {
+      const { result } = renderHook(() => useMatch3Game());
+
+      act(() => {
+        result.current.handleGemTap({ row: 0, col: 0 });
+      });
+      act(() => {
+        result.current.handleGemTap({ row: 5, col: 7 });
+      });
+
+      expect(result.current.gameState.selectedGem).toEqual({ row: 5, col: 7 });
+    });
+
+    test("does nothing while an animation is in flight", async () => {
+      // Kick off a swipe so isAnimating flips true
+      vi.mocked(gameLogic.isValidSwap).mockReturnValue(true);
+      const { result } = renderHook(() => useMatch3Game());
+
+      await act(async () => {
+        void result.current.handleSwipe({ row: 0, col: 0 }, { row: 0, col: 1 });
+        await Promise.resolve();
+      });
+      expect(result.current.gameState.isAnimating).toBe(true);
+
+      act(() => {
+        result.current.handleGemTap({ row: 2, col: 2 });
+      });
+      expect(result.current.gameState.selectedGem).toBeNull();
+
+      // Cleanup
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+    });
+
+    test("does nothing after game over", async () => {
+      vi.mocked(gameLogic.hasValidMoves).mockReturnValue(false);
+      vi.mocked(gameLogic.isValidSwap).mockReturnValue(true);
+      // A single cascade so hasValidMoves is consulted at the end
+      vi.mocked(gameLogic.findMatches)
+        .mockReturnValueOnce([
+          {
+            positions: [
+              { row: 0, col: 0 },
+              { row: 0, col: 1 },
+              { row: 0, col: 2 },
+            ],
+            type: "red",
+            score: 300,
+          },
+        ])
+        .mockReturnValue([]);
+
+      const { result } = renderHook(() => useMatch3Game());
+
+      await act(async () => {
+        void result.current.handleSwipe({ row: 0, col: 0 }, { row: 0, col: 1 });
+        await vi.runAllTimersAsync();
+      });
+      expect(result.current.gameState.gameOver).toBe(true);
+
+      act(() => {
+        result.current.handleGemTap({ row: 4, col: 4 });
+      });
+      expect(result.current.gameState.selectedGem).toBeNull();
+    });
+  });
+
   test("newGame during a cascade sleep prevents stale state from committing", async () => {
     const step: Match = {
       positions: [

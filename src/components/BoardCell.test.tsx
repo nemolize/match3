@@ -66,6 +66,13 @@ describe("BoardCell", () => {
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 
+  // This asserts the COMPARATOR behaviour — a stale `onActivate` closure
+  // is exactly what the memo permits. That is only safe when the callback
+  // provider reads state through a ref rather than its own closure (see
+  // `gameStateRef` in `useMatch3Game`); otherwise keyboard tap-to-swap
+  // silently degrades to "re-select" on the second cell. The functional
+  // regression is caught by
+  // `src/components/BoardCell.integration.test.tsx`.
   test("does not re-render when only `onActivate` identity changes", () => {
     renderSpy.mockClear();
     const bind = makeBind();

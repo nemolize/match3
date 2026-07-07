@@ -45,6 +45,20 @@ export const useMatch3Game = () => {
   // one's cascade and clobber the board.
   const isProcessingRef = useRef(false);
 
+  // Mirror of the latest gameState for callbacks that may fire from a
+  // memoized descendant holding a stale closure. Concretely, GameBoard's
+  // `BoardCell` memo comparator excludes `onActivate` (see BoardCell.tsx
+  // invariants), so keyboard clicks on an unrelated cell hit whatever
+  // `handleGemTap` closure that cell rendered with — which may be many
+  // renders behind. Reading through this ref means every handler sees
+  // fresh state regardless of its identity. The pointer path already
+  // stays fresh via use-gesture's in-place-mutating controller, but this
+  // ref keeps the two input paths consistent.
+  const gameStateRef = useRef(gameState);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  });
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -158,18 +172,22 @@ export const useMatch3Game = () => {
       // Ref lock: reject overlapping calls synchronously so an in-flight
       // swap/cascade cannot be raced by a second one.
       if (isProcessingRef.current) return;
-      if (gameState.gameOver) return;
+      // All state reads route through the ref so this callback stays a
+      // stable identity — the memoized BoardCell may fire us from a
+      // several-renders-old closure.
+      const current = gameStateRef.current;
+      if (current.gameOver) return;
       if (!areAdjacent(from, to)) return;
 
       const isStale = beginGeneration();
-      const valid = isValidSwap(gameState.board, from, to);
+      const valid = isValidSwap(current.board, from, to);
       isProcessingRef.current = true;
       try {
-        const swappedBoard = await swapAndWait(gameState.board, from, to);
+        const swappedBoard = await swapAndWait(current.board, from, to);
         if (isStale()) return;
 
         if (valid) {
-          await processMatches(swappedBoard, gameState.score);
+          await processMatches(swappedBoard, current.score);
           return;
         }
 
@@ -185,14 +203,23 @@ export const useMatch3Game = () => {
         isProcessingRef.current = false;
       }
     },
-    [gameState, processMatches, swapAndWait, beginGeneration],
+    [processMatches, swapAndWait, beginGeneration],
   );
 
   const handleGemTap = useCallback(
     (position: Position) => {
-      if (gameState.isAnimating || gameState.gameOver) return;
-
-      const selected = gameState.selectedGem;
+      // Read state through the ref (not the closure): the keyboard
+      // activation path (GemComponent → onClick with `detail === 0`) is
+      // dispatched from BoardCell's memoized render, whose `onActivate`
+      // prop can be a stale closure. `handleSwipe` provides the
+      // reentrancy guarantee via its synchronous ref lock; here we only
+      // need to observe state, so a plain ref read suffices.
+      const {
+        isAnimating,
+        gameOver,
+        selectedGem: selected,
+      } = gameStateRef.current;
+      if (isAnimating || gameOver) return;
 
       // No selection yet: select the tapped gem
       if (!selected) {
@@ -215,7 +242,7 @@ export const useMatch3Game = () => {
       // Tapping a non-adjacent gem: move the selection
       setGameState((prev) => ({ ...prev, selectedGem: position }));
     },
-    [gameState, handleSwipe],
+    [handleSwipe],
   );
 
   const newGame = useCallback(() => {

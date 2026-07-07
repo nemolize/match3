@@ -29,6 +29,19 @@ export interface BoardCellProps {
   isSelected: boolean;
   isAnimating: boolean;
   bind: CellBindFn;
+  /**
+   * Fires for keyboard activation only. Pointer taps are routed through
+   * GameBoard's gesture `bind` (see the `filterTaps` config + the `tap`
+   * branch in its `onDrag`), and GemComponent's `handleClick` gates on
+   * `event.detail === 0` so only keyboard-driven synthetic clicks reach
+   * here. Wiring a mouse-click path in would double-fire with the
+   * gesture layer.
+   *
+   * IMPORTANT: `onActivate` is deliberately excluded from the memo
+   * comparator below, so this callback's closure identity may lag the
+   * parent by an arbitrary number of renders. Any state it reads MUST
+   * be read via a ref (see `gameStateRef` in `useMatch3Game`).
+   */
   onActivate: (position: Position) => void;
 }
 
@@ -102,11 +115,14 @@ const BoardCellImpl = ({
  *    mutates in place across renders. If a major bump breaks this
  *    invariant, cells will hold stale handlers; regenerate `bind` per
  *    cell instead of memoizing it.
- * 3. `onActivate` is also excluded — it is only fired synchronously in
- *    response to a keyboard button click, and the latest parent-provided
- *    callback is captured by the render triggered by any change to the
- *    cell's own compared props. If a future feature reads more from
- *    `onActivate` at cell-render time, add it to the comparator.
+ * 3. `onActivate` is also excluded from comparison, so the closure this
+ *    cell holds MAY be several renders stale by the time the user hits
+ *    Enter/Space on it. The callback provider (`useMatch3Game`
+ *    `handleGemTap`) therefore reads all game state through a ref —
+ *    never through its own closure — so a stale identity still observes
+ *    fresh state. If a future feature needs `onActivate` to reflect
+ *    something that IS closed over, add that to the comparator instead
+ *    (or route through a ref on the provider side).
  * 4. Any new prop added to `BoardCellProps` that affects the rendered
  *    output MUST be added to the comparator.
  */

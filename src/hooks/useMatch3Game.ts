@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
+import { TIMING_CONFIG } from "@/config/timing";
 import type { GameState, Gem, Position } from "@/types/game";
 import {
   applyGravity,
@@ -12,7 +13,7 @@ import {
   swapGems,
 } from "@/utils/gameLogic";
 
-const initialGameState: GameState = {
+const createInitialGameState = (): GameState => ({
   board: createInitialBoard(),
   score: 0,
   selectedGem: null,
@@ -20,16 +21,30 @@ const initialGameState: GameState = {
   matches: [],
   gameOver: false,
   level: 1,
-};
+});
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const levelForScore = (score: number): number => Math.floor(score / 10000) + 1;
+
+const areAdjacent = (a: Position, b: Position): boolean =>
+  Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
 
 export const useMatch3Game = () => {
-  const [gameState, setGameState] = useState<GameState>(initialGameState);
+  const [gameState, setGameState] = useState<GameState>(createInitialGameState);
+
+  // Incremented on New Game so an in-flight cascade loop from the previous
+  // game stops writing state.
+  const gameGenerationRef = useRef(0);
 
   const processMatches = useCallback(
     async (board: (Gem | null)[][], score: number) => {
+      const generation = gameGenerationRef.current;
+      const isStale = () => gameGenerationRef.current !== generation;
+
       setGameState((prev) => ({ ...prev, isAnimating: true }));
 
-      let currentBoard = board.map((row) => [...row]);
+      let currentBoard = board;
       let totalScore = score;
       let comboMultiplier = 1;
 
@@ -41,37 +56,40 @@ export const useMatch3Game = () => {
           break;
         }
 
-        // Add score for matches
         const matchScore = matches.reduce((sum, match) => sum + match.score, 0);
         totalScore += Math.floor(matchScore * comboMultiplier);
-        comboMultiplier += 0.5; // Increase combo multiplier
+        comboMultiplier += 0.5;
 
-        // Show matched gems before clearing
+        // Highlight matched gems and commit the score for this step so the
+        // header ticks up while the cascade unfolds
+        if (isStale()) return;
+        const scoreSoFar = totalScore;
         setGameState((prev) => ({
           ...prev,
           matches,
+          score: scoreSoFar,
+          level: levelForScore(scoreSoFar),
         }));
 
-        // Wait for players to see the matched gems
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Let players see the matched gems before they clear
+        await sleep(TIMING_CONFIG.matchClearDelay);
 
-        // Now remove matches, apply gravity, fill spaces
-        currentBoard = removeMatches(currentBoard, matches);
-        currentBoard = applyGravity(currentBoard);
-        currentBoard = fillEmptySpaces(currentBoard);
+        currentBoard = fillEmptySpaces(
+          applyGravity(removeMatches(currentBoard, matches)),
+        );
 
-        // Update board state with cleared matches
+        if (isStale()) return;
         setGameState((prev) => ({
           ...prev,
           board: currentBoard,
           matches: [],
         }));
 
-        // Wait after clearing to let players see the result
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Let the drop animation settle before the next cascade step
+        await sleep(TIMING_CONFIG.dropAnimationWait);
       }
 
-      // Check for game over
+      if (isStale()) return;
       const gameOver = !hasValidMoves(currentBoard);
 
       setGameState((prev) => ({
@@ -80,7 +98,7 @@ export const useMatch3Game = () => {
         score: totalScore,
         isAnimating: false,
         gameOver,
-        level: Math.floor(totalScore / 10000) + 1,
+        level: levelForScore(totalScore),
       }));
     },
     [],
@@ -89,31 +107,51 @@ export const useMatch3Game = () => {
   const handleSwipe = useCallback(
     async (from: Position, to: Position) => {
       if (gameState.isAnimating || gameState.gameOver) return;
+      if (!areAdjacent(from, to)) return;
+
+      const generation = gameGenerationRef.current;
+      const isStale = () => gameGenerationRef.current !== generation;
 
       if (isValidSwap(gameState.board, from, to)) {
         setGameState((prev) => ({ ...prev, isAnimating: true }));
 
-        // Apply the swap immediately
         const newBoard = swapGems(gameState.board, from, to);
+        setGameState((prev) => ({ ...prev, board: newBoard }));
+
+        // Let the swap animation play before matches are highlighted
+        await sleep(TIMING_CONFIG.swapDuration);
+        if (isStale()) return;
+
+        await processMatches(newBoard, gameState.score);
+      } else {
+        // Invalid swap: animate the attempt and revert so the player
+        // gets clear feedback instead of silence
+        setGameState((prev) => ({ ...prev, isAnimating: true }));
+
+        const swappedBoard = swapGems(gameState.board, from, to);
+        setGameState((prev) => ({ ...prev, board: swappedBoard }));
+
+        await sleep(TIMING_CONFIG.swapDuration);
+        if (isStale()) return;
+
+        const revertedBoard = swapGems(swappedBoard, from, to);
         setGameState((prev) => ({
           ...prev,
-          board: newBoard,
+          board: revertedBoard,
           isAnimating: false,
         }));
-
-        // Process any matches resulting from the swap
-        await processMatches(newBoard, gameState.score);
       }
     },
     [gameState, processMatches],
   );
 
   const newGame = useCallback(() => {
-    const newBoard = createInitialBoard();
-    setGameState({ ...initialGameState, board: newBoard });
-    // Process any initial matches on the new board
-    const matches = findMatches(newBoard);
-    if (matches.length > 0) processMatches(newBoard, initialGameState.score);
+    gameGenerationRef.current += 1;
+    const nextState = createInitialGameState();
+    setGameState(nextState);
+    // createInitialBoard avoids initial matches, but keep the safety net
+    const matches = findMatches(nextState.board);
+    if (matches.length > 0) processMatches(nextState.board, 0);
   }, [processMatches]);
 
   return {

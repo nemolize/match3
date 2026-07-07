@@ -14,8 +14,10 @@ export interface Particle {
 }
 
 const GRAVITY = 0.5;
+const AIR_RESISTANCE = 0.98;
 const INITIAL_VELOCITY_RANGE = 5;
 const CELL_PADDING = 4; // p-1 = 4px padding from the cell
+const BASE_FRAME_MS = 1000 / 60;
 
 export interface CreateParticlesOptions {
   x: number; // Cell top-left x position in pixels
@@ -57,23 +59,30 @@ export interface UpdateParticlesOptions {
   particles: Particle[];
   elapsed: number; // Time elapsed since start in milliseconds
   lifetime?: number; // Particle lifetime in milliseconds
+  deltaMs?: number; // Time since the previous update in milliseconds
 }
 
 /**
- * Updates particle positions, velocities, and opacity based on physics simulation.
+ * Updates particle positions, velocities, and opacity based on physics
+ * simulation. Physics constants are tuned in 60fps-frame units; `deltaMs`
+ * scales the integration step so motion speed is frame-rate independent
+ * (e.g. identical on 60Hz and 120Hz displays).
  */
 export const updateParticles = ({
   particles,
   elapsed,
   lifetime = TIMING_CONFIG.particleLifetime,
+  deltaMs = BASE_FRAME_MS,
 }: UpdateParticlesOptions): Particle[] => {
+  const dt = deltaMs / BASE_FRAME_MS;
+
   return particles.map((particle) => ({
     ...particle,
-    x: particle.x + particle.vx,
-    y: particle.y + particle.vy,
-    vx: particle.vx * 0.98, // Air resistance
-    vy: particle.vy + GRAVITY,
-    rotation: particle.rotation + particle.rotationSpeed,
+    x: particle.x + particle.vx * dt,
+    y: particle.y + particle.vy * dt,
+    vx: particle.vx * Math.pow(AIR_RESISTANCE, dt),
+    vy: particle.vy + GRAVITY * dt,
+    rotation: particle.rotation + particle.rotationSpeed * dt,
     opacity: Math.max(0, 1 - elapsed / lifetime),
   }));
 };

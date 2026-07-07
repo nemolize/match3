@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { TIMING_CONFIG } from "@/config/timing";
 import type { GemType } from "@/types/game";
@@ -10,15 +10,22 @@ import {
   updateParticles as updateParticlesLogic,
 } from "@/utils/particleLogic";
 
+// Cap the per-frame integration step at ~4 frames of 60fps (~67ms). Bigger
+// gaps than that are almost always the tab having been backgrounded or a
+// major jank spike, not real frame time we want to simulate through.
+const MAX_DELTA_MS = (1000 / 60) * 4;
+
 interface GemParticlesProps {
+  id: string;
   gemType: GemType;
   x: number; // Position in pixels
   y: number; // Position in pixels
   size: number; // Size of the gem in pixels
-  onComplete: () => void;
+  onComplete: (id: string) => void;
 }
 
 export const GemParticles = ({
+  id,
   gemType,
   x,
   y,
@@ -29,20 +36,38 @@ export const GemParticles = ({
     createParticles({ x, y, size }),
   );
 
+  // Keep the latest callback in a ref so the animation timer below is not
+  // reset when the parent re-renders with a new callback identity.
+  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
-    const startTime = Date.now();
+    onCompleteRef.current = onComplete;
+  });
+
+  useEffect(() => {
+    const startTime = performance.now();
+    let lastTime = startTime;
     let animationFrame: number;
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
 
       if (elapsed >= TIMING_CONFIG.particleLifetime) {
-        onComplete();
+        onCompleteRef.current(id);
         return;
       }
 
+      // Clamp deltaMs so a big gap between frames — the tab going into the
+      // background then resuming, or a jank spike — does not translate into
+      // a single frame of position/velocity that flings particles across
+      // the screen. Also swallows the first-frame edge case where the ref
+      // integrator would otherwise see whatever wall-clock elapsed since
+      // startTime as `deltaMs`.
+      const rawDeltaMs = now - lastTime;
+      const deltaMs = Math.min(rawDeltaMs, MAX_DELTA_MS);
+      lastTime = now;
+
       setParticles((prevParticles) =>
-        updateParticlesLogic({ particles: prevParticles, elapsed }),
+        updateParticlesLogic({ particles: prevParticles, elapsed, deltaMs }),
       );
 
       animationFrame = requestAnimationFrame(animate);
@@ -51,11 +76,9 @@ export const GemParticles = ({
     animationFrame = requestAnimationFrame(animate);
 
     return () => {
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
+      cancelAnimationFrame(animationFrame);
     };
-  }, [onComplete]);
+  }, [id]);
 
   const color = GEM_COLORS[gemType];
 

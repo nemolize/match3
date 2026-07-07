@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
 import type { Gem, Position } from "@/types/game";
 import { cn } from "@/utils/cn";
@@ -5,16 +7,25 @@ import { cn } from "@/utils/cn";
 interface GemComponentProps {
   gem: Gem;
   isSelected: boolean;
-  isMatched: boolean;
   onClick: (position: Position) => void;
 }
 
-export const GemComponent = ({
+// The match animation (scale/opacity) is owned by the motion wrapper in
+// BoardCell (via `whileHover`/`whileTap` and the match-highlight `animate`
+// prop); this component intentionally applies no matched styling so the
+// two layers don't animate the same properties against each other.
+//
+// **Do NOT restore `transition-all` or `active:scale-95` on the button
+// below.** Both would put a second scale animator on top of the motion
+// wrapper's scale, which is a compounded-transform bug (0.6 × 0.95 during
+// a match tap etc.) and produces duplicate style recalcs on every match
+// clear. Uniformity refactors that copy the pattern from GameHeader must
+// stop at GemComponent's edge.
+export const GemComponent = memo(function GemComponent({
   gem,
   isSelected,
-  isMatched,
   onClick,
-}: GemComponentProps) => {
+}: GemComponentProps) {
   const gemColorClass = GEM_COLORS[gem.type];
   const gemShadowClass = GEM_STYLES[gem.type];
 
@@ -27,11 +38,10 @@ export const GemComponent = ({
       type="button"
       key={gem.id}
       className={cn(
-        "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-all duration-200 select-none hover:brightness-110 active:scale-95",
+        "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
         gemColorClass,
         gemShadowClass,
         isSelected && "ring-opacity-80 scale-105 ring-4 ring-white",
-        isMatched && "scale-75 opacity-30",
       )}
       onClick={handleClick}
     >
@@ -49,4 +59,4 @@ export const GemComponent = ({
       )}
     </button>
   );
-};
+});

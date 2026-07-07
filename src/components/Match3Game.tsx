@@ -5,7 +5,7 @@ import { GameHeader } from "@/components/GameHeader";
 import { useMatch3Game } from "@/hooks/useMatch3Game";
 
 export const Match3Game = () => {
-  const { gameState, handleSwipe, newGame } = useMatch3Game();
+  const { gameState, handleSwipe, handleGemTap, newGame } = useMatch3Game();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
@@ -27,7 +27,9 @@ export const Match3Game = () => {
         <GameBoard
           board={gameState.board}
           matches={gameState.matches}
+          selectedGem={gameState.selectedGem}
           onSwipe={handleSwipe}
+          onGemTap={handleGemTap}
           isAnimating={gameState.isAnimating}
         />
 
@@ -40,7 +42,7 @@ export const Match3Game = () => {
         >
           <p className="mb-2">Match 3 or more gems of the same color</p>
           <p className="text-xs text-white/60">
-            Swipe any gem in any direction to swap with adjacent gems
+            Swipe a gem toward a neighbor — or tap two adjacent gems — to swap
             <br />
             Only swaps that create matches are allowed!
           </p>

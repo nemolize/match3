@@ -25,7 +25,7 @@ test("should load the match3 game page", async ({ page }) => {
     page.getByText("Match 3 or more gems of the same color"),
   ).toBeVisible();
   await expect(
-    page.getByText("Swipe any gem in any direction to swap with adjacent gems"),
+    page.getByText("Swipe a gem toward a neighbor — or tap two adjacent gems"),
   ).toBeVisible();
 
   // Test that gems are swipeable

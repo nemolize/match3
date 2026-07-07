@@ -2,7 +2,11 @@ import type { GemType } from "@/types/game";
 
 export const BOARD_SIZE = 8;
 export const MIN_MATCH_LENGTH = 3;
-export const SWIPE_THRESHOLD = 50;
+// Drag distance (px) at which a swipe fires. Swipes trigger mid-drag, so
+// this is the full input latency budget — smaller = snappier, but too small
+// misfires on sloppy taps. Tunable: 24 for extra-snappy on touch screens,
+// 32 for fewer misfires on high-DPI trackpads.
+export const SWIPE_THRESHOLD = 28;
 
 export const GEM_TYPES: GemType[] = [
   "red",

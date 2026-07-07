@@ -11,14 +11,18 @@ import { computeParticleOrigin } from "@/utils/boardLayout";
 interface GameBoardProps {
   board: (Gem | null)[][];
   matches: Match[];
+  selectedGem: Position | null;
   onSwipe: (from: Position, to: Position) => void;
+  onGemTap: (position: Position) => void;
   isAnimating: boolean;
 }
 
 export const GameBoard = ({
   board,
   matches,
+  selectedGem,
   onSwipe,
+  onGemTap,
   isAnimating,
 }: GameBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -42,45 +46,61 @@ export const GameBoard = ({
     return computeParticleOrigin(el, row, col);
   }, []);
 
-  const bind = useGesture({
-    // NOTE: BoardCell is memoized on (gem, isMatched, isAnimating) and
-    // excludes `bind` from its comparator (see BoardCell.tsx for the full
-    // invariant list). If you make this handler read any other prop of
-    // GameBoard (e.g. `board`, `matches`), you MUST also add that prop to
-    // BoardCell's comparator, or memoized cells will hold a stale handler.
-    onDrag: ({ args, movement: [mx, my], last }) => {
-      if (isAnimating || !last) return;
+  const bind = useGesture(
+    {
+      // NOTE: BoardCell is memoized on (gem, isMatched, isSelected,
+      // isAnimating) and excludes `bind` from its comparator (see
+      // BoardCell.tsx for the full invariant list). If you make this
+      // handler read any other prop of GameBoard (e.g. `board`, `matches`),
+      // you MUST also add that prop to BoardCell's comparator, or memoized
+      // cells will hold a stale handler.
+      onDrag: ({ args, movement: [mx, my], tap, last, canceled, cancel }) => {
+        // `cancel()` immediately below fires the swipe mid-drag and asks
+        // use-gesture to stop the gesture, but the browser still emits a
+        // pointerup for the original press. use-gesture delivers that
+        // pointerup as a deferred `onDrag` call with `canceled: true` —
+        // if we didn't bail here the swipe would fire twice.
+        if (isAnimating || canceled) return;
 
-      if (!Array.isArray(args) || args.length !== 2) return;
-      const [row, col] = args;
-      if (typeof row !== "number" || typeof col !== "number") return;
-      const from = { row, col };
+        if (!Array.isArray(args) || args.length !== 2) return;
+        const [row, col] = args;
+        if (typeof row !== "number" || typeof col !== "number") return;
+        const from = { row, col };
 
-      const absMx = Math.abs(mx);
-      const absMy = Math.abs(my);
+        // A tap (press + release without crossing use-gesture's own
+        // filterTaps threshold) is a selection intent, not a swipe.
+        if (tap) {
+          onGemTap(from);
+          return;
+        }
 
-      if (absMx < SWIPE_THRESHOLD && absMy < SWIPE_THRESHOLD) {
-        return;
-      }
+        const absMx = Math.abs(mx);
+        const absMy = Math.abs(my);
+        if (absMx < SWIPE_THRESHOLD && absMy < SWIPE_THRESHOLD) return;
 
-      let to: Position;
+        // Pick the dominant axis and step one cell in that direction
+        const to: Position =
+          absMx > absMy
+            ? { row, col: col + (mx > 0 ? 1 : -1) }
+            : { row: row + (my > 0 ? 1 : -1), col };
 
-      if (absMx > absMy) {
-        to = { row, col: col + (mx > 0 ? 1 : -1) };
-      } else {
-        to = { row: row + (my > 0 ? 1 : -1), col };
-      }
+        // Fire as soon as the threshold is crossed mid-drag — no need to
+        // wait for the finger to lift. Cancel the rest of the gesture so
+        // the swipe can't fire twice.
+        if (!last) cancel();
 
-      if (
-        to.row >= 0 &&
-        to.row < BOARD_SIZE &&
-        to.col >= 0 &&
-        to.col < BOARD_SIZE
-      ) {
-        onSwipe(from, to);
-      }
+        if (
+          to.row >= 0 &&
+          to.row < BOARD_SIZE &&
+          to.col >= 0 &&
+          to.col < BOARD_SIZE
+        ) {
+          onSwipe(from, to);
+        }
+      },
     },
-  });
+    { drag: { filterTaps: true } },
+  );
 
   return (
     <motion.div
@@ -105,8 +125,12 @@ export const GameBoard = ({
               rowIndex={rowIndex}
               colIndex={colIndex}
               isMatched={matchedPositions.has(`${rowIndex}-${colIndex}`)}
+              isSelected={
+                selectedGem?.row === rowIndex && selectedGem?.col === colIndex
+              }
               isAnimating={isAnimating}
               bind={bind}
+              onActivate={onGemTap}
             />
           )),
         )}

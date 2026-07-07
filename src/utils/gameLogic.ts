@@ -3,7 +3,7 @@ import type { Gem, GemType, Match, Position } from "@/types/game";
 import { findMatches as detectMatches } from "@/utils/matchDetection";
 
 export const generateId = (): string => {
-  return Math.random().toString(36).substr(2, 9);
+  return Math.random().toString(36).slice(2, 11);
 };
 
 export const getRandomGemType = (): GemType => {
@@ -146,43 +146,24 @@ export const fillEmptySpaces = (board: (Gem | null)[][]): (Gem | null)[][] => {
   return newBoard;
 };
 
+const areAdjacent = (pos1: Position, pos2: Position): boolean => {
+  const dRow = Math.abs(pos1.row - pos2.row);
+  const dCol = Math.abs(pos1.col - pos2.col);
+  return (dRow === 1 && dCol === 0) || (dRow === 0 && dCol === 1);
+};
+
 export const isValidSwap = (
   board: (Gem | null)[][],
   pos1: Position,
   pos2: Position,
 ): boolean => {
-  // Check if positions are adjacent
-  const dx = Math.abs(pos1.row - pos2.row);
-  const dy = Math.abs(pos1.col - pos2.col);
-
-  if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-    // Simulate the swap
-    const newBoard = board.map((row) => [...row]);
-    const row1 = newBoard[pos1.row];
-    const row2 = newBoard[pos2.row];
-
-    if (row1 && row2) {
-      const gem1 = row1[pos1.col] ?? null;
-      const gem2 = row2[pos2.col] ?? null;
-
-      row1[pos1.col] = gem2;
-      row2[pos2.col] = gem1;
-
-      // Update positions
-      if (gem2) {
-        gem2.position = pos1;
-      }
-      if (gem1) {
-        gem1.position = pos2;
-      }
-
-      // Check if this swap creates any matches
-      const matches = findMatches(newBoard);
-      return matches.length > 0;
-    }
+  if (!areAdjacent(pos1, pos2)) {
+    return false;
   }
 
-  return false;
+  // Simulate the swap on a copy; the original board is never mutated
+  const simulatedBoard = swapGems(board, pos1, pos2);
+  return findMatches(simulatedBoard).length > 0;
 };
 
 export const swapGems = (
@@ -198,16 +179,13 @@ export const swapGems = (
     const gem1 = row1[pos1.col] ?? null;
     const gem2 = row2[pos2.col] ?? null;
 
-    row1[pos1.col] = gem2;
-    row2[pos2.col] = gem1;
-
-    // Update positions
-    if (gem2) {
-      gem2.position = pos1;
-    }
-    if (gem1) {
-      gem1.position = pos2;
-    }
+    // Place cloned gems with updated positions; original gems stay untouched
+    row1[pos1.col] = gem2
+      ? { ...gem2, position: { row: pos1.row, col: pos1.col } }
+      : null;
+    row2[pos2.col] = gem1
+      ? { ...gem1, position: { row: pos2.row, col: pos2.col } }
+      : null;
   }
 
   return newBoard;

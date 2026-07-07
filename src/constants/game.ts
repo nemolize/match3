@@ -2,8 +2,6 @@ import type { GemType } from "@/types/game";
 
 export const BOARD_SIZE = 8;
 export const MIN_MATCH_LENGTH = 3;
-export const ANIMATION_DURATION = 200;
-export const FALL_ANIMATION_DURATION = 150;
 export const SWIPE_THRESHOLD = 50;
 
 export const GEM_TYPES: GemType[] = [
@@ -31,10 +29,4 @@ export const GEM_STYLES: Record<GemType, string> = {
   yellow: "shadow-yellow-300",
   purple: "shadow-purple-300",
   orange: "shadow-orange-300",
-};
-
-export const SCORE_VALUES = {
-  BASE_MATCH: 100,
-  COMBO_MULTIPLIER: 1.5,
-  SPECIAL_MATCH: 200,
 };

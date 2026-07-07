@@ -146,7 +146,7 @@ export const fillEmptySpaces = (board: (Gem | null)[][]): (Gem | null)[][] => {
   return newBoard;
 };
 
-const areAdjacent = (pos1: Position, pos2: Position): boolean => {
+export const areAdjacent = (pos1: Position, pos2: Position): boolean => {
   const dRow = Math.abs(pos1.row - pos2.row);
   const dCol = Math.abs(pos1.col - pos2.col);
   return (dRow === 1 && dCol === 0) || (dRow === 0 && dCol === 1);

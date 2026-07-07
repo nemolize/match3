@@ -10,6 +10,11 @@ import {
   updateParticles as updateParticlesLogic,
 } from "@/utils/particleLogic";
 
+// Cap the per-frame integration step at ~4 frames of 60fps (~67ms). Bigger
+// gaps than that are almost always the tab having been backgrounded or a
+// major jank spike, not real frame time we want to simulate through.
+const MAX_DELTA_MS = (1000 / 60) * 4;
+
 interface GemParticlesProps {
   id: string;
   gemType: GemType;
@@ -51,7 +56,14 @@ export const GemParticles = ({
         return;
       }
 
-      const deltaMs = now - lastTime;
+      // Clamp deltaMs so a big gap between frames — the tab going into the
+      // background then resuming, or a jank spike — does not translate into
+      // a single frame of position/velocity that flings particles across
+      // the screen. Also swallows the first-frame edge case where the ref
+      // integrator would otherwise see whatever wall-clock elapsed since
+      // startTime as `deltaMs`.
+      const rawDeltaMs = now - lastTime;
+      const deltaMs = Math.min(rawDeltaMs, MAX_DELTA_MS);
       lastTime = now;
 
       setParticles((prevParticles) =>

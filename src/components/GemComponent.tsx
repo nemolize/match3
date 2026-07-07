@@ -11,8 +11,16 @@ interface GemComponentProps {
 }
 
 // The match animation (scale/opacity) is owned by the motion wrapper in
-// GameBoard; this component intentionally applies no matched styling so
-// the two layers don't animate the same properties against each other.
+// BoardCell (via `whileHover`/`whileTap` and the match-highlight `animate`
+// prop); this component intentionally applies no matched styling so the
+// two layers don't animate the same properties against each other.
+//
+// **Do NOT restore `transition-all` or `active:scale-95` on the button
+// below.** Both would put a second scale animator on top of the motion
+// wrapper's scale, which is a compounded-transform bug (0.6 × 0.95 during
+// a match tap etc.) and produces duplicate style recalcs on every match
+// clear. Uniformity refactors that copy the pattern from GameHeader must
+// stop at GemComponent's edge.
 export const GemComponent = memo(function GemComponent({
   gem,
   isSelected,

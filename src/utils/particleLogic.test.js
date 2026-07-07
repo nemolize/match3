@@ -292,6 +292,34 @@ describe("particleLogic", () => {
       expect(updated[0].opacity).toBeGreaterThanOrEqual(0);
     });
 
+    test("should not be capped by the component's MAX_DELTA_MS (the cap is applied at the caller)", () => {
+      // Sanity: updateParticles itself is a pure integrator — it happily
+      // takes any deltaMs. The clamp lives in GemParticles so tests that
+      // exercise clamping happen at the component layer, not here.
+      const initialParticles = [
+        {
+          id: "1",
+          x: 100,
+          y: 100,
+          vx: 10,
+          vy: 0,
+          rotation: 0,
+          rotationSpeed: 0,
+          size: 10,
+          opacity: 1,
+        },
+      ];
+
+      const updated = updateParticles({
+        particles: initialParticles,
+        elapsed: 0,
+        deltaMs: 1000, // A pathological one-second frame
+      });
+
+      // Full one-second step: 60 frames of horizontal velocity
+      expect(updated[0].x).toBeCloseTo(100 + 10 * 60);
+    });
+
     test("should scale integration with deltaMs (frame-rate independent)", () => {
       const initialParticles = [
         {

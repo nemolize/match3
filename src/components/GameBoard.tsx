@@ -1,6 +1,14 @@
 import { useGesture } from "@use-gesture/react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { GemComponent } from "@/components/GemComponent";
 import { GemParticles } from "@/components/GemParticles";
@@ -21,6 +29,76 @@ const gemSpring = {
   mass: 0.6,
 };
 
+const noop = () => {};
+
+type BindFn = ReturnType<typeof useGesture>;
+
+interface BoardCellProps {
+  gem: Gem | null;
+  rowIndex: number;
+  colIndex: number;
+  isMatched: boolean;
+  isAnimating: boolean;
+  bind: BindFn;
+}
+
+const BoardCell = memo(
+  function BoardCell({
+    gem,
+    rowIndex,
+    colIndex,
+    isMatched,
+    isAnimating,
+    bind,
+  }: BoardCellProps) {
+    return (
+      <div
+        aria-colindex={colIndex + 1}
+        aria-rowindex={rowIndex + 1}
+        className="aspect-square rounded-lg bg-gray-700/80 p-1"
+        role="gridcell"
+      >
+        <AnimatePresence mode="popLayout">
+          {gem && (
+            <div
+              {...bind(rowIndex, colIndex)}
+              className="h-full w-full touch-none"
+              style={{ touchAction: "none" }}
+            >
+              <motion.div
+                key={gem.id}
+                className="h-full w-full"
+                layout
+                layoutId={`gem-${gem.id}`}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{
+                  scale: isMatched ? 0.6 : 1,
+                  opacity: isMatched ? 0.25 : 1,
+                  rotateX: isMatched ? 18 : 0,
+                }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={gemSpring}
+                whileHover={isAnimating ? undefined : { scale: 1.05 }}
+                whileTap={isAnimating ? undefined : { scale: 0.95 }}
+              >
+                <GemComponent gem={gem} isSelected={false} onClick={noop} />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  },
+  // `bind` is deliberately excluded: use-gesture recreates the bind function
+  // every render, but the returned handlers delegate to a controller that is
+  // stable for the lifetime of the hook, so a memoized cell keeps working
+  // with the handlers it already rendered.
+  (prev, next) =>
+    prev.gem === next.gem &&
+    prev.isMatched === next.isMatched &&
+    prev.isAnimating === next.isAnimating,
+);
+
 interface BreakingGem {
   id: string;
   type: GemType;
@@ -29,29 +107,29 @@ interface BreakingGem {
   size: number;
 }
 
-export const GameBoard = ({
+interface BreakingGemsLayerProps {
+  board: (Gem | null)[][];
+  matches: Match[];
+  boardRef: RefObject<HTMLDivElement | null>;
+}
+
+/**
+ * Owns the breaking-gem particle effects. Isolating this state from the
+ * grid means per-particle spawn/complete updates re-render only this layer,
+ * not the 64 board cells.
+ */
+const BreakingGemsLayer = ({
   board,
   matches,
-  onSwipe,
-  isAnimating,
-}: GameBoardProps) => {
-  const boardRef = useRef<HTMLDivElement>(null);
+  boardRef,
+}: BreakingGemsLayerProps) => {
   const [breakingGems, setBreakingGems] = useState<BreakingGem[]>([]);
   const prevMatchesRef = useRef<Match[]>([]);
 
-  const matchedPositions = useMemo(
-    () =>
-      new Set(
-        matches.flatMap((match) =>
-          match.positions.map((pos) => `${pos.row}-${pos.col}`),
-        ),
-      ),
-    [matches],
-  );
-
   // Detect new matches and create breaking gem particles
   useEffect(() => {
-    if (!boardRef.current) return;
+    const boardElement = boardRef.current;
+    if (!boardElement) return;
 
     // Check if we have new matches
     const newMatchPositions = matches.flatMap((match) => match.positions);
@@ -70,10 +148,10 @@ export const GameBoard = ({
         ));
 
     if (hasNewMatches) {
-      const boardRect = boardRef.current.getBoundingClientRect();
+      const boardRect = boardElement.getBoundingClientRect();
 
       // Get the actual gap size from computed styles
-      const boardStyle = window.getComputedStyle(boardRef.current);
+      const boardStyle = window.getComputedStyle(boardElement);
       const gapSize = parseFloat(boardStyle.gap) || 0;
 
       // Calculate actual cell size accounting for gaps
@@ -81,8 +159,8 @@ export const GameBoard = ({
         (boardRect.width - gapSize * (BOARD_SIZE - 1)) / BOARD_SIZE;
 
       // Get the board's offset from its parent (accounts for p-4 padding on parent)
-      const boardOffsetLeft = boardRef.current.offsetLeft;
-      const boardOffsetTop = boardRef.current.offsetTop;
+      const boardOffsetLeft = boardElement.offsetLeft;
+      const boardOffsetTop = boardElement.offsetTop;
 
       // Cell padding (p-1 = 4px)
       const cellPadding = 4;
@@ -119,11 +197,46 @@ export const GameBoard = ({
     }
 
     prevMatchesRef.current = matches;
-  }, [matches, board]);
+  }, [matches, board, boardRef]);
 
-  const handleParticleComplete = (id: string) => {
+  const handleParticleComplete = useCallback((id: string) => {
     setBreakingGems((prev) => prev.filter((gem) => gem.id !== id));
-  };
+  }, []);
+
+  return (
+    <>
+      {breakingGems.map((breakingGem) => (
+        <GemParticles
+          key={breakingGem.id}
+          id={breakingGem.id}
+          gemType={breakingGem.type}
+          x={breakingGem.x}
+          y={breakingGem.y}
+          size={breakingGem.size}
+          onComplete={handleParticleComplete}
+        />
+      ))}
+    </>
+  );
+};
+
+export const GameBoard = ({
+  board,
+  matches,
+  onSwipe,
+  isAnimating,
+}: GameBoardProps) => {
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  const matchedPositions = useMemo(
+    () =>
+      new Set(
+        matches.flatMap((match) =>
+          match.positions.map((pos) => `${pos.row}-${pos.col}`),
+        ),
+      ),
+    [matches],
+  );
 
   const bind = useGesture({
     onDrag: ({ args, movement: [mx, my], last }) => {
@@ -167,83 +280,31 @@ export const GameBoard = ({
       animate={{ opacity: 1, scale: 1, rotateX: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
-      <motion.div
+      <div
         ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
         className="mx-auto grid aspect-square w-full max-w-sm gap-1"
         role="grid"
         style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
-        layout
-        transition={{ type: "spring", stiffness: 260, damping: 28 }}
       >
         {board.map((row, rowIndex) =>
-          row.map((gem, colIndex) => {
-            const positionKey = `${rowIndex}-${colIndex}`;
-            const isMatched = matchedPositions.has(positionKey);
-            const gestureHandlers = bind(rowIndex, colIndex);
-
-            return (
-              <motion.div
-                aria-colindex={colIndex + 1}
-                aria-rowindex={rowIndex + 1}
-                key={positionKey}
-                className="aspect-square rounded-lg bg-gray-700/80 p-1"
-                role="gridcell"
-                layout
-                transition={{ type: "spring", stiffness: 260, damping: 28 }}
-                whileHover={{ scale: 1.02 }}
-              >
-                <AnimatePresence mode="popLayout">
-                  {gem && (
-                    <div
-                      {...gestureHandlers}
-                      className="h-full w-full touch-none"
-                      style={{ touchAction: "none" }}
-                    >
-                      <motion.div
-                        key={gem.id}
-                        className="h-full w-full"
-                        layout
-                        layoutId={`gem-${gem.id}`}
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{
-                          scale: isMatched ? 0.6 : 1,
-                          opacity: isMatched ? 0.25 : 1,
-                          rotateX: isMatched ? 18 : 0,
-                        }}
-                        exit={{ scale: 0.4, opacity: 0 }}
-                        transition={gemSpring}
-                        whileHover={isAnimating ? undefined : { scale: 1.05 }}
-                        whileTap={isAnimating ? undefined : { scale: 0.95 }}
-                      >
-                        <GemComponent
-                          gem={gem}
-                          isSelected={false}
-                          isMatched={isMatched}
-                          onClick={() => {}}
-                        />
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          }),
+          row.map((gem, colIndex) => (
+            <BoardCell
+              key={`${rowIndex}-${colIndex}`}
+              gem={gem}
+              rowIndex={rowIndex}
+              colIndex={colIndex}
+              isMatched={matchedPositions.has(`${rowIndex}-${colIndex}`)}
+              isAnimating={isAnimating}
+              bind={bind}
+            />
+          )),
         )}
-      </motion.div>
+      </div>
 
       {/* Particle effects for breaking gems */}
-      {breakingGems.map((breakingGem) => (
-        <GemParticles
-          key={breakingGem.id}
-          gemType={breakingGem.type}
-          x={breakingGem.x}
-          y={breakingGem.y}
-          size={breakingGem.size}
-          onComplete={() => handleParticleComplete(breakingGem.id)}
-        />
-      ))}
+      <BreakingGemsLayer board={board} matches={matches} boardRef={boardRef} />
 
       <AnimatePresence>
         {isAnimating && (

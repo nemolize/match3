@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { TIMING_CONFIG } from "@/config/timing";
 import type { GemType } from "@/types/game";
@@ -11,14 +11,16 @@ import {
 } from "@/utils/particleLogic";
 
 interface GemParticlesProps {
+  id: string;
   gemType: GemType;
   x: number; // Position in pixels
   y: number; // Position in pixels
   size: number; // Size of the gem in pixels
-  onComplete: () => void;
+  onComplete: (id: string) => void;
 }
 
 export const GemParticles = ({
+  id,
   gemType,
   x,
   y,
@@ -29,20 +31,31 @@ export const GemParticles = ({
     createParticles({ x, y, size }),
   );
 
+  // Keep the latest callback in a ref so the animation timer below is not
+  // reset when the parent re-renders with a new callback identity.
+  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
-    const startTime = Date.now();
+    onCompleteRef.current = onComplete;
+  });
+
+  useEffect(() => {
+    const startTime = performance.now();
+    let lastTime = startTime;
     let animationFrame: number;
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
 
       if (elapsed >= TIMING_CONFIG.particleLifetime) {
-        onComplete();
+        onCompleteRef.current(id);
         return;
       }
 
+      const deltaMs = now - lastTime;
+      lastTime = now;
+
       setParticles((prevParticles) =>
-        updateParticlesLogic({ particles: prevParticles, elapsed }),
+        updateParticlesLogic({ particles: prevParticles, elapsed, deltaMs }),
       );
 
       animationFrame = requestAnimationFrame(animate);
@@ -51,11 +64,9 @@ export const GemParticles = ({
     animationFrame = requestAnimationFrame(animate);
 
     return () => {
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
+      cancelAnimationFrame(animationFrame);
     };
-  }, [onComplete]);
+  }, [id]);
 
   const color = GEM_COLORS[gemType];
 

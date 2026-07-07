@@ -292,6 +292,33 @@ describe("particleLogic", () => {
       expect(updated[0].opacity).toBeGreaterThanOrEqual(0);
     });
 
+    test("should scale integration with deltaMs (frame-rate independent)", () => {
+      const initialParticles = [
+        {
+          id: "1",
+          x: 100,
+          y: 100,
+          vx: 10,
+          vy: 0,
+          rotation: 0,
+          rotationSpeed: 6,
+          size: 10,
+          opacity: 1,
+        },
+      ];
+
+      // Half a 60fps frame (as on a 120Hz display) moves half as far
+      const updated = updateParticles({
+        particles: initialParticles,
+        elapsed: 0,
+        deltaMs: 1000 / 120,
+      });
+
+      expect(updated[0].x).toBeCloseTo(105); // 100 + 10 * 0.5
+      expect(updated[0].rotation).toBeCloseTo(3); // 6 * 0.5
+      expect(updated[0].vy).toBeCloseTo(0.25); // gravity 0.5 * 0.5
+    });
+
     test("should update multiple particles independently", () => {
       const initialParticles = [
         {

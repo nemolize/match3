@@ -1,13 +1,13 @@
-import { memo } from "react";
+import { memo, type MouseEvent } from "react";
 
 import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
-import type { Gem, Position } from "@/types/game";
+import type { Gem } from "@/types/game";
 import { cn } from "@/utils/cn";
 
 interface GemComponentProps {
   gem: Gem;
   isSelected: boolean;
-  onClick: (position: Position) => void;
+  onActivate: () => void;
 }
 
 // The match animation (scale/opacity) is owned by the motion wrapper in
@@ -24,19 +24,26 @@ interface GemComponentProps {
 export const GemComponent = memo(function GemComponent({
   gem,
   isSelected,
-  onClick,
+  onActivate,
 }: GemComponentProps) {
   const gemColorClass = GEM_COLORS[gem.type];
   const gemShadowClass = GEM_STYLES[gem.type];
 
-  const handleClick = () => {
-    onClick(gem.position);
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    // Pointer taps are handled by the gesture layer in GameBoard; only
+    // keyboard activation (Enter/Space => detail === 0) is handled here,
+    // so a tap doesn't toggle the selection twice.
+    if (event.detail === 0) {
+      onActivate();
+    }
   };
 
   return (
     <button
       type="button"
       key={gem.id}
+      aria-label={`${gem.type} gem`}
+      aria-pressed={isSelected}
       className={cn(
         "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
         gemColorClass,

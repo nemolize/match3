@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo } from "react";
 
 import { GemComponent } from "@/components/GemComponent";
-import type { Gem } from "@/types/game";
+import type { Gem, Position } from "@/types/game";
 
 /**
  * The `useGesture` return type: given a cell's (row, col) it produces the
@@ -21,15 +21,15 @@ const gemSpring = {
   mass: 0.6,
 };
 
-const noop = () => {};
-
 export interface BoardCellProps {
   gem: Gem | null;
   rowIndex: number;
   colIndex: number;
   isMatched: boolean;
+  isSelected: boolean;
   isAnimating: boolean;
   bind: CellBindFn;
+  onActivate: (position: Position) => void;
 }
 
 const BoardCellImpl = ({
@@ -37,8 +37,10 @@ const BoardCellImpl = ({
   rowIndex,
   colIndex,
   isMatched,
+  isSelected,
   isAnimating,
   bind,
+  onActivate,
 }: BoardCellProps) => {
   return (
     <div
@@ -70,7 +72,11 @@ const BoardCellImpl = ({
               whileHover={isAnimating ? undefined : { scale: 1.05 }}
               whileTap={isAnimating ? undefined : { scale: 0.95 }}
             >
-              <GemComponent gem={gem} isSelected={false} onClick={noop} />
+              <GemComponent
+                gem={gem}
+                isSelected={isSelected}
+                onActivate={() => onActivate({ row: rowIndex, col: colIndex })}
+              />
             </motion.div>
           </div>
         )}
@@ -96,13 +102,19 @@ const BoardCellImpl = ({
  *    mutates in place across renders. If a major bump breaks this
  *    invariant, cells will hold stale handlers; regenerate `bind` per
  *    cell instead of memoizing it.
- * 3. If you add a new prop to `BoardCellProps` that affects the rendered
- *    output, add it to the comparator too.
+ * 3. `onActivate` is also excluded — it is only fired synchronously in
+ *    response to a keyboard button click, and the latest parent-provided
+ *    callback is captured by the render triggered by any change to the
+ *    cell's own compared props. If a future feature reads more from
+ *    `onActivate` at cell-render time, add it to the comparator.
+ * 4. Any new prop added to `BoardCellProps` that affects the rendered
+ *    output MUST be added to the comparator.
  */
 export const BoardCell = memo(
   BoardCellImpl,
   (prev, next) =>
     prev.gem === next.gem &&
     prev.isMatched === next.isMatched &&
+    prev.isSelected === next.isSelected &&
     prev.isAnimating === next.isAnimating,
 );

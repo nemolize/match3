@@ -188,6 +188,36 @@ export const useMatch3Game = () => {
     [gameState, processMatches, swapAndWait, beginGeneration],
   );
 
+  const handleGemTap = useCallback(
+    (position: Position) => {
+      if (gameState.isAnimating || gameState.gameOver) return;
+
+      const selected = gameState.selectedGem;
+
+      // No selection yet: select the tapped gem
+      if (!selected) {
+        setGameState((prev) => ({ ...prev, selectedGem: position }));
+        return;
+      }
+
+      // Tapping the selected gem again: deselect
+      if (selected.row === position.row && selected.col === position.col) {
+        setGameState((prev) => ({ ...prev, selectedGem: null }));
+        return;
+      }
+
+      // Tapping an adjacent gem: attempt the swap
+      if (areAdjacent(selected, position)) {
+        void handleSwipe(selected, position);
+        return;
+      }
+
+      // Tapping a non-adjacent gem: move the selection
+      setGameState((prev) => ({ ...prev, selectedGem: position }));
+    },
+    [gameState, handleSwipe],
+  );
+
   const newGame = useCallback(() => {
     gameGenerationRef.current += 1;
     // Any in-flight loop is now stale; release the lock so the fresh game
@@ -208,6 +238,7 @@ export const useMatch3Game = () => {
   return {
     gameState,
     handleSwipe,
+    handleGemTap,
     newGame,
   };
 };

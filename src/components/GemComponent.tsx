@@ -52,24 +52,8 @@ export const GemComponent = memo(function GemComponent({
       )}
       onClick={handleClick}
     >
-      <div aria-hidden="true" className="gem-crystal__depth" />
-      <div
-        aria-hidden="true"
-        className="gem-crystal__facet gem-crystal__facet--left"
-      />
-      <div
-        aria-hidden="true"
-        className="gem-crystal__facet gem-crystal__facet--top"
-      />
-      <div
-        aria-hidden="true"
-        className="gem-crystal__facet gem-crystal__facet--right"
-      />
-      <div
-        aria-hidden="true"
-        className="gem-crystal__facet gem-crystal__facet--bottom"
-      />
-      <div aria-hidden="true" className="gem-crystal__shine" />
+      <div aria-hidden="true" className="gem-crystal__surface" />
+      <div aria-hidden="true" className="gem-crystal__gloss" />
 
       {/* Selection indicator */}
       {isSelected && (

@@ -1,6 +1,6 @@
 import { useGesture } from "@use-gesture/react";
-import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useMemo, useRef } from "react";
+import { motion } from "motion/react";
+import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
@@ -27,16 +27,6 @@ export const GameBoard = ({
 }: GameBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
 
-  const matchedPositions = useMemo(
-    () =>
-      new Set(
-        matches.flatMap((match) =>
-          match.positions.map((pos) => `${pos.row}-${pos.col}`),
-        ),
-      ),
-    [matches],
-  );
-
   // GameBoard owns the ref, so it also owns the DOM measurement. The
   // particle layer receives ready-to-use spawn origins and never has to
   // know how the grid is laid out.
@@ -48,8 +38,8 @@ export const GameBoard = ({
 
   const bind = useGesture(
     {
-      // NOTE: BoardCell is memoized on (gem, isMatched, isSelected,
-      // isAnimating) and excludes `bind` from its comparator (see
+      // NOTE: BoardCell is memoized on (gem, isSelected, isAnimating)
+      // and excludes `bind` from its comparator (see
       // BoardCell.tsx for the full invariant list). If you make this
       // handler read any other prop of GameBoard (e.g. `board`, `matches`),
       // you MUST also add that prop to BoardCell's comparator, or memoized
@@ -124,7 +114,6 @@ export const GameBoard = ({
               gem={gem}
               rowIndex={rowIndex}
               colIndex={colIndex}
-              isMatched={matchedPositions.has(`${rowIndex}-${colIndex}`)}
               isSelected={
                 selectedGem?.row === rowIndex && selectedGem?.col === colIndex
               }
@@ -142,18 +131,6 @@ export const GameBoard = ({
         matches={matches}
         resolveOrigin={resolveParticleOrigin}
       />
-
-      <AnimatePresence>
-        {isAnimating && (
-          <motion.div
-            className="absolute inset-0 rounded-2xl bg-black/20"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          />
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };

@@ -38,7 +38,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={makeBind()}
@@ -47,7 +46,7 @@ describe("BoardCell", () => {
     );
     expect(renderSpy).toHaveBeenCalledTimes(1);
 
-    // Same gem/isMatched/isSelected/isAnimating but a fresh `bind` (as
+    // Same gem/isSelected/isAnimating but a fresh `bind` (as
     // use-gesture returns every render) MUST NOT re-render the cell —
     // this is the whole point of excluding `bind` from the memo
     // comparator.
@@ -56,7 +55,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={makeBind()}
@@ -82,7 +80,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}
@@ -98,7 +95,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}
@@ -106,39 +102,6 @@ describe("BoardCell", () => {
       />,
     );
     expect(renderSpy).toHaveBeenCalledTimes(1);
-  });
-
-  test("re-renders when `isMatched` flips", () => {
-    renderSpy.mockClear();
-    const bind = makeBind();
-
-    const { rerender } = render(
-      <BoardCell
-        gem={gem}
-        rowIndex={0}
-        colIndex={0}
-        isMatched={false}
-        isSelected={false}
-        isAnimating={false}
-        bind={bind}
-        onActivate={noopActivate}
-      />,
-    );
-    expect(renderSpy).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <BoardCell
-        gem={gem}
-        rowIndex={0}
-        colIndex={0}
-        isMatched
-        isSelected={false}
-        isAnimating={false}
-        bind={bind}
-        onActivate={noopActivate}
-      />,
-    );
-    expect(renderSpy).toHaveBeenCalledTimes(2);
   });
 
   test("re-renders when `isSelected` flips", () => {
@@ -150,7 +113,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}
@@ -164,7 +126,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected
         isAnimating={false}
         bind={bind}
@@ -183,7 +144,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}
@@ -197,7 +157,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating
         bind={bind}
@@ -216,7 +175,6 @@ describe("BoardCell", () => {
         gem={gem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}
@@ -234,7 +192,6 @@ describe("BoardCell", () => {
         gem={nextGem}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={false}
         isAnimating={false}
         bind={bind}

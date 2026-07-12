@@ -25,7 +25,6 @@ export interface BoardCellProps {
   gem: Gem | null;
   rowIndex: number;
   colIndex: number;
-  isMatched: boolean;
   isSelected: boolean;
   isAnimating: boolean;
   bind: CellBindFn;
@@ -49,7 +48,6 @@ const BoardCellImpl = ({
   gem,
   rowIndex,
   colIndex,
-  isMatched,
   isSelected,
   isAnimating,
   bind,
@@ -75,11 +73,7 @@ const BoardCellImpl = ({
               layout
               layoutId={`gem-${gem.id}`}
               initial={{ scale: 0.8, opacity: 0 }}
-              animate={{
-                scale: isMatched ? 0.6 : 1,
-                opacity: isMatched ? 0.25 : 1,
-                rotateX: isMatched ? 18 : 0,
-              }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.4, opacity: 0 }}
               transition={gemSpring}
               whileHover={isAnimating ? undefined : { scale: 1.05 }}
@@ -130,7 +124,6 @@ export const BoardCell = memo(
   BoardCellImpl,
   (prev, next) =>
     prev.gem === next.gem &&
-    prev.isMatched === next.isMatched &&
     prev.isSelected === next.isSelected &&
     prev.isAnimating === next.isAnimating,
 );

@@ -48,7 +48,6 @@ const TwoCellHarness = () => {
         gem={gemA}
         rowIndex={0}
         colIndex={0}
-        isMatched={false}
         isSelected={isSel(gameState.selectedGem, 0, 0)}
         isAnimating={gameState.isAnimating}
         bind={noopBind}
@@ -58,7 +57,6 @@ const TwoCellHarness = () => {
         gem={gemB}
         rowIndex={0}
         colIndex={1}
-        isMatched={false}
         isSelected={isSel(gameState.selectedGem, 0, 1)}
         isAnimating={gameState.isAnimating}
         bind={noopBind}
@@ -87,7 +85,7 @@ describe("BoardCell keyboard tap-to-swap integration", () => {
    * Critical-bug repro (keyboard-only path):
    *
    * When A is selected the hook only flips A's `isSelected` — B's props
-   * (gem, isMatched, isSelected, isAnimating) are all unchanged, so B's
+   * (gem, isSelected, isAnimating) are all unchanged, so B's
    * memoized cell does NOT re-render, and B's rendered `onClick` stays
    * pointing at the previous `handleGemTap` closure — which reads a
    * stale `selectedGem === null`. Clicking B via the KEYBOARD path

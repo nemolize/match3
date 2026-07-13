@@ -76,6 +76,7 @@ textarea {
 }
 
 .gem-crystal__surface,
+.gem-crystal__pattern,
 .gem-crystal__gloss,
 .gem-crystal__selection {
   position: absolute;
@@ -113,6 +114,37 @@ textarea {
     rgb(255 255 255 / 0.34) 34%,
     transparent 64%
   );
+}
+
+.gem-crystal__pattern {
+  z-index: 2;
+  inset: 13%;
+  clip-path: polygon(
+    23% 0,
+    77% 0,
+    100% 23%,
+    100% 77%,
+    77% 100%,
+    23% 100%,
+    0 77%,
+    0 23%
+  );
+  opacity: 0.72;
+  background:
+    repeating-conic-gradient(
+      from 22.5deg,
+      transparent 0deg 21deg,
+      rgb(255 255 255 / 0.22) 21deg 22.2deg,
+      transparent 22.2deg 45deg
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 0 29%,
+      rgb(255 255 255 / 0.24) 29% 30.5%,
+      transparent 30.5% 53%,
+      rgb(0 0 0 / 0.16) 53% 54.5%,
+      transparent 54.5%
+    );
 }
 
 .gem-crystal__selection {

@@ -48,11 +48,11 @@ export const GemComponent = memo(function GemComponent({
         "gem-crystal relative h-full w-full cursor-pointer shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
         gemColorClass,
         gemShadowClass,
-        isSelected && "scale-105",
       )}
       onClick={handleClick}
     >
       <div aria-hidden="true" className="gem-crystal__surface" />
+      <div aria-hidden="true" className="gem-crystal__pattern" />
       <div aria-hidden="true" className="gem-crystal__gloss" />
 
       {/* Selection indicator */}

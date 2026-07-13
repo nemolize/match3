@@ -27,8 +27,38 @@ textarea {
   user-select: auto;
 }
 
-/* The base color comes from each gem's Tailwind background class. The layers
-   above it create a smooth, flat-faced gemstone without per-color assets. */
+/* The base color comes from each gemstone's OKLCH class. The layers above it
+   create a smooth, flat-faced gemstone without per-color image assets. */
+.gem-crystal--ruby {
+  background-color: rgb(189 23 69 / 0.68);
+  background-color: oklch(0.54 0.23 20 / 0.68);
+}
+
+.gem-crystal--paraiba {
+  background-color: rgb(53 201 221 / 0.64);
+  background-color: oklch(0.77 0.15 210 / 0.64);
+}
+
+.gem-crystal--emerald {
+  background-color: rgb(32 170 115 / 0.68);
+  background-color: oklch(0.65 0.18 150 / 0.68);
+}
+
+.gem-crystal--citrine {
+  background-color: rgb(237 197 49 / 0.68);
+  background-color: oklch(0.84 0.18 95 / 0.68);
+}
+
+.gem-crystal--amethyst {
+  background-color: rgb(165 74 196 / 0.68);
+  background-color: oklch(0.6 0.2 305 / 0.68);
+}
+
+.gem-crystal--topaz {
+  background-color: rgb(223 121 46 / 0.68);
+  background-color: oklch(0.72 0.19 55 / 0.68);
+}
+
 .gem-crystal {
   clip-path: polygon(
     25% 0,

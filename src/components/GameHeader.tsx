@@ -14,7 +14,7 @@ export const GameHeader = ({
   onNewGame,
 }: GameHeaderProps) => {
   return (
-    <div className="mb-6 flex items-center justify-between px-4">
+    <div className="mb-3 flex items-center justify-between px-2 sm:mb-6 sm:px-4">
       {/* Score */}
       <motion.div
         className="text-center"

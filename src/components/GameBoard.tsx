@@ -94,7 +94,7 @@ export const GameBoard = ({
 
   return (
     <motion.div
-      className="relative rounded-2xl bg-gray-800 p-4 shadow-2xl"
+      className="relative rounded-2xl bg-gray-800 p-2 shadow-2xl sm:p-4"
       initial={{ opacity: 0, scale: 0.92, rotateX: 12 }}
       animate={{ opacity: 1, scale: 1, rotateX: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}

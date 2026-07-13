@@ -8,7 +8,7 @@ export const Match3Game = () => {
   const { gameState, handleSwipe, handleGemTap, newGame } = useMatch3Game();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-3 py-2 sm:min-h-screen sm:p-4">
       <motion.div
         className="relative w-full max-w-md"
         initial={{ opacity: 0, scale: 0.8 }}
@@ -35,7 +35,7 @@ export const Match3Game = () => {
 
         {/* Instructions */}
         <motion.div
-          className="mt-6 text-center text-sm text-white/80"
+          className="mt-3 text-center text-xs text-white/80 sm:mt-6 sm:text-sm"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}

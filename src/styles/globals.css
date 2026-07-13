@@ -40,8 +40,20 @@ textarea {
     0 75%,
     0 25%
   );
-  isolation: isolate;
-  filter: saturate(1.18);
+}
+
+@supports (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .gem-crystal:hover,
+  .gem-crystal:focus-visible {
+    -webkit-backdrop-filter: blur(0.8px) saturate(1.38) brightness(1.08);
+    backdrop-filter: blur(0.8px) saturate(1.38) brightness(1.08);
+  }
+}
+
+.gem-crystal:focus-visible {
+  outline: none;
 }
 
 .gem-crystal::before,
@@ -68,6 +80,11 @@ textarea {
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
 }
 
+.gem-crystal:focus-visible::before {
+  border-color: white;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.84);
+}
+
 .gem-crystal::after {
   inset: 0;
   background:
@@ -77,6 +94,7 @@ textarea {
 
 .gem-crystal__surface,
 .gem-crystal__pattern,
+.gem-crystal__refraction,
 .gem-crystal__gloss,
 .gem-crystal__selection {
   position: absolute;
@@ -114,6 +132,29 @@ textarea {
     rgb(255 255 255 / 0.34) 34%,
     transparent 64%
   );
+}
+
+.gem-crystal__refraction {
+  z-index: 2;
+  inset: 9%;
+  clip-path: polygon(
+    24% 0,
+    76% 0,
+    100% 24%,
+    100% 76%,
+    76% 100%,
+    24% 100%,
+    0 76%,
+    0 24%
+  );
+  background: linear-gradient(
+    128deg,
+    transparent 16%,
+    rgb(175 244 255 / 0.2) 42%,
+    rgb(255 189 229 / 0.17) 55%,
+    transparent 82%
+  );
+  opacity: 0.76;
 }
 
 .gem-crystal__pattern {

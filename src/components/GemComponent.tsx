@@ -53,6 +53,7 @@ export const GemComponent = memo(function GemComponent({
     >
       <div aria-hidden="true" className="gem-crystal__surface" />
       <div aria-hidden="true" className="gem-crystal__pattern" />
+      <div aria-hidden="true" className="gem-crystal__refraction" />
       <div aria-hidden="true" className="gem-crystal__gloss" />
 
       {/* Selection indicator */}

@@ -18,12 +18,12 @@ export const GEM_TYPES: GemType[] = [
 ];
 
 export const GEM_COLORS: Record<GemType, string> = {
-  red: "bg-rose-600",
-  blue: "bg-cyan-400",
-  green: "bg-emerald-500",
-  yellow: "bg-yellow-400",
-  purple: "bg-violet-500",
-  orange: "bg-amber-500",
+  red: "bg-rose-800/95",
+  blue: "bg-cyan-800/95",
+  green: "bg-emerald-800/95",
+  yellow: "bg-amber-700/95",
+  purple: "bg-violet-900/95",
+  orange: "bg-orange-800/95",
 };
 
 export const GEM_STYLES: Record<GemType, string> = {

@@ -30,18 +30,24 @@ textarea {
 /* The base color comes from each gem's Tailwind background class. The layers
    above it create a smooth, flat-faced gemstone without per-color assets. */
 .gem-crystal {
-  clip-path: polygon(
-    25% 0,
-    75% 0,
-    100% 25%,
-    100% 75%,
-    75% 100%,
-    25% 100%,
-    0 75%,
-    0 25%
-  );
+  --gem-octagon:
+    25% 0, 75% 0, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0 75%, 0 25%;
+  --gem-octagon-inner:
+    24% 0, 76% 0, 100% 24%, 100% 76%, 76% 100%, 24% 100%, 0 76%, 0 24%;
+
+  clip-path: polygon(var(--gem-octagon));
   isolation: isolate;
-  filter: saturate(1.18);
+  filter: saturate(1.28) contrast(1.08);
+}
+
+.gem-crystal:hover {
+  filter: saturate(1.28) contrast(1.08) brightness(1.1);
+}
+
+.gem-crystal:focus-visible {
+  filter: saturate(1.28) contrast(1.08)
+    drop-shadow(0 0 4px rgb(255 224 151 / 0.9));
+  outline: none;
 }
 
 .gem-crystal::before,
@@ -54,25 +60,16 @@ textarea {
 
 .gem-crystal::before {
   inset: 2%;
-  clip-path: polygon(
-    25% 0,
-    75% 0,
-    100% 25%,
-    100% 75%,
-    75% 100%,
-    25% 100%,
-    0 75%,
-    0 25%
-  );
-  border: 1px solid rgb(255 255 255 / 0.62);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  clip-path: polygon(var(--gem-octagon));
+  border: 1px solid rgb(255 224 151 / 0.4);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
 }
 
 .gem-crystal::after {
   inset: 0;
   background:
-    linear-gradient(145deg, rgb(255 255 255 / 0.48), transparent 32%),
-    linear-gradient(325deg, rgb(0 0 0 / 0.24), transparent 35%);
+    linear-gradient(145deg, rgb(255 255 255 / 0.38), transparent 27%),
+    linear-gradient(325deg, rgb(0 0 0 / 0.64), transparent 54%);
 }
 
 .gem-crystal__surface,
@@ -86,21 +83,12 @@ textarea {
 .gem-crystal__surface {
   z-index: 0;
   inset: 6%;
-  clip-path: polygon(
-    24% 0,
-    76% 0,
-    100% 24%,
-    100% 76%,
-    76% 100%,
-    24% 100%,
-    0 76%,
-    0 24%
-  );
+  clip-path: polygon(var(--gem-octagon-inner));
   background: linear-gradient(
     145deg,
-    rgb(255 255 255 / 0.16),
-    transparent 42%,
-    rgb(0 0 0 / 0.22)
+    rgb(255 255 255 / 0.2),
+    transparent 36%,
+    rgb(0 0 0 / 0.52)
   );
 }
 
@@ -110,8 +98,8 @@ textarea {
   clip-path: polygon(11% 6%, 89% 6%, 100% 22%, 65% 67%, 24% 59%, 0 26%);
   background: linear-gradient(
     165deg,
-    rgb(255 255 255 / 0.88),
-    rgb(255 255 255 / 0.34) 34%,
+    rgb(255 255 255 / 0.76),
+    rgb(255 224 151 / 0.22) 34%,
     transparent 64%
   );
 }
@@ -119,30 +107,21 @@ textarea {
 .gem-crystal__pattern {
   z-index: 2;
   inset: 13%;
-  clip-path: polygon(
-    23% 0,
-    77% 0,
-    100% 23%,
-    100% 77%,
-    77% 100%,
-    23% 100%,
-    0 77%,
-    0 23%
-  );
-  opacity: 0.72;
+  clip-path: polygon(var(--gem-octagon-inner));
+  opacity: 0.56;
   background:
     repeating-conic-gradient(
       from 22.5deg,
       transparent 0deg 21deg,
-      rgb(255 255 255 / 0.22) 21deg 22.2deg,
+      rgb(255 224 151 / 0.32) 21deg 22.2deg,
       transparent 22.2deg 45deg
     ),
     radial-gradient(
       circle at center,
       transparent 0 29%,
-      rgb(255 255 255 / 0.24) 29% 30.5%,
+      rgb(255 224 151 / 0.34) 29% 30.5%,
       transparent 30.5% 53%,
-      rgb(0 0 0 / 0.16) 53% 54.5%,
+      rgb(0 0 0 / 0.48) 53% 54.5%,
       transparent 54.5%
     );
 }
@@ -150,18 +129,9 @@ textarea {
 .gem-crystal__selection {
   z-index: 4;
   inset: 2%;
-  clip-path: polygon(
-    25% 0,
-    75% 0,
-    100% 25%,
-    100% 75%,
-    75% 100%,
-    25% 100%,
-    0 75%,
-    0 25%
-  );
-  border: 3px solid white;
-  box-shadow: 0 0 10px 2px rgb(255 255 255 / 0.92);
+  clip-path: polygon(var(--gem-octagon));
+  border: 3px solid rgb(255 244 210);
+  box-shadow: 0 0 10px 2px rgb(255 224 151 / 0.78);
 }
 
 /* Smooth animations */

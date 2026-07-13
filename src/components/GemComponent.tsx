@@ -45,7 +45,7 @@ export const GemComponent = memo(function GemComponent({
       aria-label={`${gemName} gem`}
       aria-pressed={isSelected}
       className={cn(
-        "gem-crystal relative h-full w-full cursor-pointer shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
+        "gem-crystal relative h-full w-full cursor-pointer shadow-lg transition-[filter] duration-200 select-none",
         gemColorClass,
         gemShadowClass,
       )}

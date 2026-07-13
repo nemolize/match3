@@ -35,13 +35,23 @@ textarea {
 }
 
 .gem-crystal--paraiba {
-  background-color: rgb(53 201 221 / 0.64);
-  background-color: oklch(0.77 0.15 210 / 0.64);
+  background-color: rgb(41 190 224 / 0.8);
+  background-color: oklch(0.76 0.19 215 / 0.8);
 }
 
 .gem-crystal--emerald {
-  background-color: rgb(32 170 115 / 0.68);
-  background-color: oklch(0.65 0.18 150 / 0.68);
+  background-color: rgb(21 166 79 / 0.82);
+  background-color: oklch(0.63 0.22 145 / 0.82);
+}
+
+.gem-crystal--paraiba .gem-crystal__refraction,
+.gem-crystal--emerald .gem-crystal__refraction {
+  opacity: 0.55;
+}
+
+.gem-crystal--paraiba .gem-crystal__gloss,
+.gem-crystal--emerald .gem-crystal__gloss {
+  opacity: 0.72;
 }
 
 .gem-crystal--citrine {

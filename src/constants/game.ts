@@ -18,19 +18,28 @@ export const GEM_TYPES: GemType[] = [
 ];
 
 export const GEM_COLORS: Record<GemType, string> = {
-  red: "bg-red-500",
-  blue: "bg-blue-500",
-  green: "bg-green-500",
-  yellow: "bg-yellow-400",
-  purple: "bg-purple-500",
-  orange: "bg-orange-500",
+  red: "gem-crystal--ruby",
+  blue: "gem-crystal--paraiba",
+  green: "gem-crystal--emerald",
+  yellow: "gem-crystal--citrine",
+  purple: "gem-crystal--amethyst",
+  orange: "gem-crystal--topaz",
 };
 
 export const GEM_STYLES: Record<GemType, string> = {
-  red: "shadow-red-300",
-  blue: "shadow-blue-300",
-  green: "shadow-green-300",
+  red: "shadow-rose-300",
+  blue: "shadow-cyan-200",
+  green: "shadow-emerald-300",
   yellow: "shadow-yellow-300",
-  purple: "shadow-purple-300",
-  orange: "shadow-orange-300",
+  purple: "shadow-violet-300",
+  orange: "shadow-amber-300",
+};
+
+export const GEM_NAMES: Record<GemType, string> = {
+  red: "ruby",
+  blue: "Paraiba tourmaline",
+  green: "emerald",
+  yellow: "citrine",
+  purple: "amethyst",
+  orange: "imperial topaz",
 };

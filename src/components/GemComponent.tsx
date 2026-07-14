@@ -1,6 +1,6 @@
 import { memo, type MouseEvent } from "react";
 
-import { GEM_COLORS, GEM_STYLES } from "@/constants/game";
+import { GEM_COLORS, GEM_NAMES, GEM_STYLES } from "@/constants/game";
 import type { Gem } from "@/types/game";
 import { cn } from "@/utils/cn";
 
@@ -26,6 +26,7 @@ export const GemComponent = memo(function GemComponent({
   onActivate,
 }: GemComponentProps) {
   const gemColorClass = GEM_COLORS[gem.type];
+  const gemName = GEM_NAMES[gem.type];
   const gemShadowClass = GEM_STYLES[gem.type];
 
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -41,27 +42,23 @@ export const GemComponent = memo(function GemComponent({
     <button
       type="button"
       key={gem.id}
-      aria-label={`${gem.type} gem`}
+      aria-label={`${gemName} gem`}
       aria-pressed={isSelected}
       className={cn(
-        "relative h-full w-full cursor-pointer rounded-lg shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
+        "gem-crystal relative h-full w-full cursor-pointer shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
         gemColorClass,
         gemShadowClass,
-        isSelected && "ring-opacity-80 scale-105 ring-4 ring-white",
       )}
       onClick={handleClick}
     >
-      {/* Gem highlight effect */}
-      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/30 to-transparent" />
-
-      {/* Gem icon/symbol */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="h-4 w-4 rounded-full bg-white/40" />
-      </div>
+      <div aria-hidden="true" className="gem-crystal__surface" />
+      <div aria-hidden="true" className="gem-crystal__pattern" />
+      <div aria-hidden="true" className="gem-crystal__refraction" />
+      <div aria-hidden="true" className="gem-crystal__gloss" />
 
       {/* Selection indicator */}
       {isSelected && (
-        <div className="absolute inset-0 rounded-lg border-2 border-white" />
+        <div aria-hidden="true" className="gem-crystal__selection" />
       )}
     </button>
   );

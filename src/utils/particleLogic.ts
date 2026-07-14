@@ -88,10 +88,10 @@ export const updateParticles = ({
 };
 
 export const GEM_COLORS: Record<GemType, string> = {
-  red: "#ef4444",
-  blue: "#3b82f6",
-  green: "#22c55e",
-  yellow: "#eab308",
-  purple: "#a855f7",
-  orange: "#f97316",
+  red: "#bd1745",
+  blue: "#35c9dd",
+  green: "#20aa73",
+  yellow: "#edc531",
+  purple: "#a54ac4",
+  orange: "#df792e",
 };

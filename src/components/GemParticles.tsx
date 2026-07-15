@@ -5,7 +5,7 @@ import { TIMING_CONFIG } from "@/config/timing";
 import type { GemType } from "@/types/game";
 import {
   createParticles,
-  GEM_COLORS,
+  GEM_PARTICLE_COLORS,
   type Particle,
   updateParticles as updateParticlesLogic,
 } from "@/utils/particleLogic";
@@ -80,7 +80,7 @@ export const GemParticles = ({
     };
   }, [id]);
 
-  const color = GEM_COLORS[gemType];
+  const color = GEM_PARTICLE_COLORS[gemType];
 
   return (
     <div className="pointer-events-none absolute inset-0">

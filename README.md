@@ -14,7 +14,7 @@ A modern match-3 puzzle game built with React, TypeScript, and Vite. Features sm
 ## Technical Features
 
 - **React** with TypeScript
-- **Framer Motion** for smooth animations
+- **Motion** for smooth animations
 - **@use-gesture/react** for touch gesture handling
 - **Vite** for fast development and building
 - **ESLint** and **Prettier** for linting and formatting
@@ -40,7 +40,7 @@ pnpm install
 Start the development server:
 
 ```bash
-pnpm dev
+pnpm run dev
 ```
 
 The game will be available at `http://localhost:5173`
@@ -58,13 +58,13 @@ The game will be available at `http://localhost:5173`
 Build for production:
 
 ```bash
-pnpm build
+pnpm run build
 ```
 
 Preview the production build:
 
 ```bash
-pnpm preview
+pnpm run preview
 ```
 
 ### Testing
@@ -72,13 +72,13 @@ pnpm preview
 Run unit tests:
 
 ```bash
-pnpm test
+pnpm run test
 ```
 
 Run end-to-end tests:
 
 ```bash
-pnpm test:e2e
+pnpm run test:e2e
 ```
 
 ### Code Quality
@@ -86,19 +86,19 @@ pnpm test:e2e
 Check code style and issues:
 
 ```bash
-pnpm lint
+pnpm run lint
 ```
 
 Fix code style issues:
 
 ```bash
-pnpm lint:fix
+pnpm run fix
 ```
 
 Run type checking:
 
 ```bash
-pnpm typecheck
+pnpm run lint:typecheck
 ```
 
 ## License

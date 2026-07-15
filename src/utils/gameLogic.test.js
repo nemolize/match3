@@ -4,6 +4,7 @@ import {
   applyGravity,
   createInitialBoard,
   fillEmptySpaces,
+  findMatches,
   generateId,
   getRandomGemType,
   hasValidMoves,
@@ -73,32 +74,12 @@ describe("Game Logic", () => {
       }
     });
 
-    test("should not create matches on initial board", () => {
-      // Test multiple times as it's random
+    test("should create playable boards without pre-existing matches", () => {
       for (let i = 0; i < 10; i++) {
         const board = createInitialBoard();
-        // Check no horizontal matches
-        for (let row = 0; row < 8; row++) {
-          for (let col = 0; col < 6; col++) {
-            const gem1 = board[row][col];
-            const gem2 = board[row][col + 1];
-            const gem3 = board[row][col + 2];
-            expect(gem1.type === gem2.type && gem2.type === gem3.type).toBe(
-              false,
-            );
-          }
-        }
-        // Check no vertical matches
-        for (let col = 0; col < 8; col++) {
-          for (let row = 0; row < 6; row++) {
-            const gem1 = board[row][col];
-            const gem2 = board[row + 1][col];
-            const gem3 = board[row + 2][col];
-            expect(gem1.type === gem2.type && gem2.type === gem3.type).toBe(
-              false,
-            );
-          }
-        }
+
+        expect(findMatches(board)).toEqual([]);
+        expect(hasValidMoves(board)).toBe(true);
       }
     });
   });
@@ -233,6 +214,30 @@ describe("Game Logic", () => {
       );
 
       expect(isValid).toBe(false);
+    });
+
+    test("should ignore a pre-existing match elsewhere on the board", () => {
+      const board = createEmptyBoard();
+      board[0][0] = createGem("red", 0, 0);
+      board[0][1] = createGem("red", 0, 1);
+      board[0][2] = createGem("red", 0, 2);
+      board[7][6] = createGem("blue", 7, 6);
+      board[7][7] = createGem("green", 7, 7);
+
+      expect(isValidSwap(board, { row: 7, col: 6 }, { row: 7, col: 7 })).toBe(
+        false,
+      );
+    });
+
+    test("should ignore a pre-existing match at the swapped positions", () => {
+      const board = createEmptyBoard();
+      board[0][0] = createGem("red", 0, 0);
+      board[0][1] = createGem("red", 0, 1);
+      board[0][2] = createGem("red", 0, 2);
+
+      expect(isValidSwap(board, { row: 0, col: 0 }, { row: 0, col: 1 })).toBe(
+        false,
+      );
     });
 
     test("should not mutate the board while simulating the swap", () => {
@@ -426,11 +431,10 @@ describe("Game Logic", () => {
 
     test("should handle boards with null spaces", () => {
       const board = createEmptyBoard();
-      // Partially filled board
       board[0][0] = createGem("red", 0, 0);
       board[0][1] = createGem("blue", 0, 1);
-      board[1][0] = createGem("red", 1, 0);
-      board[2][0] = createGem("red", 2, 0);
+      board[0][2] = createGem("red", 0, 2);
+      board[0][3] = createGem("red", 0, 3);
 
       expect(hasValidMoves(board)).toBe(true);
     });

@@ -17,7 +17,7 @@ export const GEM_TYPES: GemType[] = [
   "orange",
 ];
 
-export const GEM_COLORS: Record<GemType, string> = {
+export const GEM_VARIANT_CLASSES: Record<GemType, string> = {
   red: "gem-crystal--ruby",
   blue: "gem-crystal--paraiba",
   green: "gem-crystal--emerald",

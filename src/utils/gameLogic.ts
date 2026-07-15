@@ -23,7 +23,7 @@ export const createGem = (row: number, col: number): Gem => {
   };
 };
 
-export const createInitialBoard = (): (Gem | null)[][] => {
+const createBoardCandidate = (): (Gem | null)[][] => {
   const board: (Gem | null)[][] = [];
 
   for (let row = 0; row < BOARD_SIZE; row++) {
@@ -46,6 +46,20 @@ export const createInitialBoard = (): (Gem | null)[][] => {
   }
 
   return board;
+};
+
+const MAX_INITIAL_BOARD_ATTEMPTS = 100;
+
+export const createInitialBoard = (): (Gem | null)[][] => {
+  for (let attempt = 0; attempt < MAX_INITIAL_BOARD_ATTEMPTS; attempt++) {
+    const board = createBoardCandidate();
+
+    if (findMatches(board).length === 0 && hasValidMoves(board)) {
+      return board;
+    }
+  }
+
+  throw new Error("Unable to generate a playable initial board");
 };
 
 const wouldCreateMatch = (
@@ -152,10 +166,19 @@ export const areAdjacent = (pos1: Position, pos2: Position): boolean => {
   return (dRow === 1 && dCol === 0) || (dRow === 0 && dCol === 1);
 };
 
-export const isValidSwap = (
+const matchKey = (match: Match): string => {
+  const positions = match.positions
+    .map(({ row, col }) => `${row},${col}`)
+    .sort()
+    .join("|");
+  return `${match.type}:${positions}`;
+};
+
+const isValidSwapWithExistingMatches = (
   board: (Gem | null)[][],
   pos1: Position,
   pos2: Position,
+  existingMatches: ReadonlySet<string>,
 ): boolean => {
   if (!areAdjacent(pos1, pos2)) {
     return false;
@@ -163,7 +186,24 @@ export const isValidSwap = (
 
   // Simulate the swap on a copy; the original board is never mutated
   const simulatedBoard = swapGems(board, pos1, pos2);
-  return findMatches(simulatedBoard).length > 0;
+  return findMatches(simulatedBoard).some(
+    (match) =>
+      !existingMatches.has(matchKey(match)) &&
+      match.positions.some(
+        (position) =>
+          (position.row === pos1.row && position.col === pos1.col) ||
+          (position.row === pos2.row && position.col === pos2.col),
+      ),
+  );
+};
+
+export const isValidSwap = (
+  board: (Gem | null)[][],
+  pos1: Position,
+  pos2: Position,
+): boolean => {
+  const existingMatches = new Set(findMatches(board).map(matchKey));
+  return isValidSwapWithExistingMatches(board, pos1, pos2, existingMatches);
 };
 
 export const swapGems = (
@@ -192,15 +232,15 @@ export const swapGems = (
 };
 
 export const hasValidMoves = (board: (Gem | null)[][]): boolean => {
+  const existingMatches = new Set(findMatches(board).map(matchKey));
+
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       const currentPos = { row, col };
 
-      // Check adjacent positions
+      // Right and down cover every undirected adjacent pair exactly once.
       const adjacent = [
-        { row: row - 1, col },
         { row: row + 1, col },
-        { row, col: col - 1 },
         { row, col: col + 1 },
       ];
 
@@ -211,7 +251,14 @@ export const hasValidMoves = (board: (Gem | null)[][]): boolean => {
           adjPos.col >= 0 &&
           adjPos.col < BOARD_SIZE
         ) {
-          if (isValidSwap(board, currentPos, adjPos)) {
+          if (
+            isValidSwapWithExistingMatches(
+              board,
+              currentPos,
+              adjPos,
+              existingMatches,
+            )
+          ) {
             return true;
           }
         }

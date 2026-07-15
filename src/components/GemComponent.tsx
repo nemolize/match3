@@ -1,6 +1,6 @@
 import { memo, type MouseEvent } from "react";
 
-import { GEM_COLORS, GEM_NAMES, GEM_STYLES } from "@/constants/game";
+import { GEM_NAMES, GEM_STYLES, GEM_VARIANT_CLASSES } from "@/constants/game";
 import type { Gem } from "@/types/game";
 import { cn } from "@/utils/cn";
 
@@ -25,7 +25,7 @@ export const GemComponent = memo(function GemComponent({
   isSelected,
   onActivate,
 }: GemComponentProps) {
-  const gemColorClass = GEM_COLORS[gem.type];
+  const gemColorClass = GEM_VARIANT_CLASSES[gem.type];
   const gemName = GEM_NAMES[gem.type];
   const gemShadowClass = GEM_STYLES[gem.type];
 

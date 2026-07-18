@@ -19,6 +19,7 @@ const createInitialGameState = (): GameState => ({
   score: 0,
   selectedGem: null,
   isAnimating: false,
+  animationPhase: "idle",
   matches: [],
   gameOver: false,
   level: 1,
@@ -94,6 +95,7 @@ export const useMatch3Game = () => {
         board: swapped,
         selectedGem: null,
         isAnimating: true,
+        animationPhase: "swap",
       }));
       await sleep(TIMING_CONFIG.swapDuration);
       return swapped;
@@ -146,6 +148,7 @@ export const useMatch3Game = () => {
           ...prev,
           board: currentBoard,
           matches: [],
+          animationPhase: "drop",
         }));
 
         // Let the drop animation settle before the next cascade step
@@ -160,6 +163,7 @@ export const useMatch3Game = () => {
         board: currentBoard,
         score: totalScore,
         isAnimating: false,
+        animationPhase: "idle",
         gameOver,
         level: levelForScore(totalScore),
       }));
@@ -198,6 +202,7 @@ export const useMatch3Game = () => {
           ...prev,
           board: revertedBoard,
           isAnimating: false,
+          animationPhase: "idle",
         }));
       } finally {
         isProcessingRef.current = false;

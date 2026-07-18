@@ -131,9 +131,12 @@ export const applyGravity = (board: (Gem | null)[][]): (Gem | null)[][] => {
       const boardRow = newBoard[row];
       if (boardRow) {
         if (gem) {
+          const fallDistance = row - gem.position.row;
           boardRow[col] = {
             ...gem,
             position: { row, col },
+            fallDistance: fallDistance > 0 ? fallDistance : undefined,
+            entersFromAbove: undefined,
           };
         } else {
           boardRow[col] = null;
@@ -148,11 +151,20 @@ export const applyGravity = (board: (Gem | null)[][]): (Gem | null)[][] => {
 export const fillEmptySpaces = (board: (Gem | null)[][]): (Gem | null)[][] => {
   const newBoard = board.map((row) => [...row]);
 
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
+  for (let col = 0; col < BOARD_SIZE; col++) {
+    const emptyCount = newBoard.reduce(
+      (count, row) => count + (row[col] === null ? 1 : 0),
+      0,
+    );
+
+    for (let row = 0; row < BOARD_SIZE; row++) {
       const boardRow = newBoard[row];
       if (boardRow && boardRow[col] === null) {
-        boardRow[col] = createGem(row, col);
+        boardRow[col] = {
+          ...createGem(row, col),
+          fallDistance: emptyCount,
+          entersFromAbove: true,
+        };
       }
     }
   }
@@ -221,10 +233,20 @@ export const swapGems = (
 
     // Place cloned gems with updated positions; original gems stay untouched
     row1[pos1.col] = gem2
-      ? { ...gem2, position: { row: pos1.row, col: pos1.col } }
+      ? {
+          ...gem2,
+          position: { row: pos1.row, col: pos1.col },
+          fallDistance: undefined,
+          entersFromAbove: undefined,
+        }
       : null;
     row2[pos2.col] = gem1
-      ? { ...gem1, position: { row: pos2.row, col: pos2.col } }
+      ? {
+          ...gem1,
+          position: { row: pos2.row, col: pos2.col },
+          fallDistance: undefined,
+          entersFromAbove: undefined,
+        }
       : null;
   }
 

@@ -9,7 +9,11 @@ export interface Gem {
   id: string;
   type: GemType;
   position: Position;
+  fallDistance?: number;
+  entersFromAbove?: boolean;
 }
+
+export type AnimationPhase = "idle" | "swap" | "drop";
 
 export interface Match {
   positions: Position[];
@@ -22,6 +26,7 @@ export interface GameState {
   score: number;
   selectedGem: Position | null;
   isAnimating: boolean;
+  animationPhase: AnimationPhase;
   matches: Match[];
   gameOver: boolean;
   level: number;

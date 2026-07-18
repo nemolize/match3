@@ -347,6 +347,22 @@ describe("Game Logic", () => {
       const newBoard = applyGravity(board);
 
       expect(newBoard[7][0].position).toEqual({ row: 7, col: 0 });
+      expect(newBoard[7][0].fallDistance).toBe(7);
+    });
+
+    test("should only mark gems that actually fall", () => {
+      const board = createEmptyBoard();
+      board[6][0] = {
+        ...createGem("red", 6, 0),
+        entersFromAbove: true,
+      };
+      board[7][0] = createGem("blue", 7, 0);
+
+      const newBoard = applyGravity(board);
+
+      expect(newBoard[6][0].fallDistance).toBeUndefined();
+      expect(newBoard[6][0].entersFromAbove).toBeUndefined();
+      expect(newBoard[7][0].fallDistance).toBeUndefined();
     });
   });
 
@@ -388,6 +404,18 @@ describe("Game Logic", () => {
           expect(gem.position).toEqual({ row, col });
         }
       }
+    });
+
+    test("should mark refill gems to fall from above the board", () => {
+      const board = createEmptyBoard();
+      board[7][0] = createGem("red", 7, 0);
+
+      const newBoard = fillEmptySpaces(board);
+
+      expect(newBoard[0][0].fallDistance).toBe(7);
+      expect(newBoard[0][0].entersFromAbove).toBe(true);
+      expect(newBoard[6][0].fallDistance).toBe(7);
+      expect(newBoard[7][0].entersFromAbove).toBeUndefined();
     });
   });
 

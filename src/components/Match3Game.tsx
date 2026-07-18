@@ -28,6 +28,7 @@ export const Match3Game = () => {
           board={gameState.board}
           matches={gameState.matches}
           selectedGem={gameState.selectedGem}
+          animationPhase={gameState.animationPhase}
           onSwipe={handleSwipe}
           onGemTap={handleGemTap}
           isAnimating={gameState.isAnimating}

@@ -5,13 +5,14 @@ import { useCallback, useRef } from "react";
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
 import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
-import type { Gem, Match, Position } from "@/types/game";
+import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
 import { computeParticleOrigin } from "@/utils/boardLayout";
 
 interface GameBoardProps {
   board: (Gem | null)[][];
   matches: Match[];
   selectedGem: Position | null;
+  animationPhase: AnimationPhase;
   onSwipe: (from: Position, to: Position) => void;
   onGemTap: (position: Position) => void;
   isAnimating: boolean;
@@ -21,6 +22,7 @@ export const GameBoard = ({
   board,
   matches,
   selectedGem,
+  animationPhase,
   onSwipe,
   onGemTap,
   isAnimating,
@@ -118,6 +120,7 @@ export const GameBoard = ({
                 selectedGem?.row === rowIndex && selectedGem?.col === colIndex
               }
               isAnimating={isAnimating}
+              animationPhase={animationPhase}
               bind={bind}
               onActivate={onGemTap}
             />

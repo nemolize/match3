@@ -48,6 +48,7 @@ test("should load the match3 game page", async ({ page }) => {
   // Check that the game board is present (grid of gems)
   const gameBoard = page.getByRole("grid");
   await expect(gameBoard).toBeVisible();
+  await expect(gameBoard).toHaveCSS("overflow", "hidden");
 
   // Check that instructions are present
   await expect(

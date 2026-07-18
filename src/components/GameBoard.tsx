@@ -105,7 +105,7 @@ export const GameBoard = ({
         ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
-        className="mx-auto grid aspect-square w-full max-w-sm gap-1"
+        className="mx-auto grid aspect-square w-full max-w-sm gap-1 overflow-hidden"
         role="grid"
         style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
       >

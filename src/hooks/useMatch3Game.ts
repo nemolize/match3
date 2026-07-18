@@ -1,3 +1,4 @@
+import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { TIMING_CONFIG } from "@/config/timing";
@@ -19,6 +20,7 @@ const createInitialGameState = (): GameState => ({
   score: 0,
   selectedGem: null,
   isAnimating: false,
+  animationPhase: "idle",
   matches: [],
   gameOver: false,
   level: 1,
@@ -29,6 +31,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const levelForScore = (score: number): number => Math.floor(score / 10000) + 1;
 
 export const useMatch3Game = () => {
+  const shouldReduceMotion = useReducedMotion() ?? false;
   const [gameState, setGameState] = useState<GameState>(createInitialGameState);
 
   // Incremented on New Game so an in-flight cascade loop from the previous
@@ -94,11 +97,12 @@ export const useMatch3Game = () => {
         board: swapped,
         selectedGem: null,
         isAnimating: true,
+        animationPhase: "swap",
       }));
-      await sleep(TIMING_CONFIG.swapDuration);
+      await sleep(shouldReduceMotion ? 0 : TIMING_CONFIG.swapDuration);
       return swapped;
     },
-    [],
+    [shouldReduceMotion],
   );
 
   const processMatches = useCallback(
@@ -146,10 +150,11 @@ export const useMatch3Game = () => {
           ...prev,
           board: currentBoard,
           matches: [],
+          animationPhase: "drop",
         }));
 
         // Let the drop animation settle before the next cascade step
-        await sleep(TIMING_CONFIG.dropAnimationWait);
+        await sleep(shouldReduceMotion ? 0 : TIMING_CONFIG.dropAnimationWait);
       }
 
       if (isStale()) return;
@@ -160,11 +165,12 @@ export const useMatch3Game = () => {
         board: currentBoard,
         score: totalScore,
         isAnimating: false,
+        animationPhase: "idle",
         gameOver,
         level: levelForScore(totalScore),
       }));
     },
-    [beginGeneration],
+    [beginGeneration, shouldReduceMotion],
   );
 
   const handleSwipe = useCallback(
@@ -198,6 +204,7 @@ export const useMatch3Game = () => {
           ...prev,
           board: revertedBoard,
           isAnimating: false,
+          animationPhase: "idle",
         }));
       } finally {
         isProcessingRef.current = false;

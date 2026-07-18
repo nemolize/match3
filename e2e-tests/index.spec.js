@@ -48,6 +48,7 @@ test("should load the match3 game page", async ({ page }) => {
   // Check that the game board is present (grid of gems)
   const gameBoard = page.getByRole("grid");
   await expect(gameBoard).toBeVisible();
+  await expect(gameBoard).toHaveCSS("overflow", "hidden");
 
   // Check that instructions are present
   await expect(
@@ -67,6 +68,59 @@ test("should load the match3 game page", async ({ page }) => {
 
   // Verify the game restarted (score should be 0)
   await expect(page.locator("text=/^0$/").first()).toBeVisible();
+});
+
+test("clips refill gems while they fall in from above the board", async ({
+  page,
+}) => {
+  await page.goto("/e2e-tests/fixtures/drop.html");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Start drop" }).click();
+
+  await page.waitForFunction(
+    () => {
+      const grid = document.querySelector('[role="grid"]');
+      if (!(grid instanceof HTMLElement)) return false;
+      const gridBox = grid.getBoundingClientRect();
+      return Array.from(
+        grid.querySelectorAll('button[aria-label$=" gem"]'),
+      ).some((gem) => {
+        const box = gem.getBoundingClientRect();
+        return box.top < gridBox.top - 0.5 && box.bottom > gridBox.top + 0.5;
+      });
+    },
+    undefined,
+    { timeout: 2500 },
+  );
+
+  const clipState = await page.getByRole("grid").evaluate((grid) => {
+    const gridBox = grid.getBoundingClientRect();
+    const enteringGem = Array.from(
+      grid.querySelectorAll('button[aria-label$=" gem"]'),
+    ).find((gem) => {
+      const box = gem.getBoundingClientRect();
+      return box.top < gridBox.top - 0.5 && box.bottom > gridBox.top + 0.5;
+    });
+    if (!(enteringGem instanceof HTMLElement)) return null;
+
+    const gemBox = enteringGem.getBoundingClientRect();
+    const sampleX = gemBox.left + gemBox.width / 2;
+    const sampleY = (Math.max(gemBox.top, 0) + gridBox.top) / 2;
+    const hit = document.elementFromPoint(sampleX, sampleY);
+    const motionWrapper = enteringGem.parentElement;
+
+    return {
+      hitGemOutsideBoard: hit?.closest('button[aria-label$=" gem"]') !== null,
+      isTransforming:
+        motionWrapper instanceof HTMLElement &&
+        getComputedStyle(motionWrapper).transform !== "none",
+    };
+  });
+
+  expect(clipState).toEqual({
+    hitGemOutsideBoard: false,
+    isTransforming: true,
+  });
 });
 
 test.describe("mobile layout", () => {

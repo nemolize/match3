@@ -1,10 +1,20 @@
 import { act, renderHook } from "@testing-library/react";
+import { useReducedMotion } from "motion/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { TIMING_CONFIG } from "@/config/timing";
 import { useMatch3Game } from "@/hooks/useMatch3Game";
 import type { Gem, Match } from "@/types/game";
 import * as gameLogic from "@/utils/gameLogic";
+
+vi.mock("motion/react", async () => {
+  const actual =
+    await vi.importActual<typeof import("motion/react")>("motion/react");
+  return {
+    ...actual,
+    useReducedMotion: vi.fn(() => false),
+  };
+});
 
 vi.mock("@/utils/gameLogic", async () => {
   const actual =
@@ -29,6 +39,7 @@ const someSwipe = { from: { row: 0, col: 0 }, to: { row: 0, col: 1 } };
 describe("useMatch3Game", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.mocked(useReducedMotion).mockReturnValue(false);
     // Default: no swap creates a match, no cascade fires, board has moves.
     vi.mocked(gameLogic.isValidSwap).mockReturnValue(false);
     vi.mocked(gameLogic.findMatches).mockReturnValue([]);
@@ -56,6 +67,7 @@ describe("useMatch3Game", () => {
     // Check the two swapped cells directly — asserting the whole grid
     // differs would flake when the two adjacent gems share a type.
     expect(result.current.gameState.isAnimating).toBe(true);
+    expect(result.current.gameState.animationPhase).toBe("swap");
     const midLayout = gemTypeGrid(result.current.gameState.board);
     expect(midLayout[0]?.[0]).toBe(initialLayout[0]?.[1]);
     expect(midLayout[0]?.[1]).toBe(initialLayout[0]?.[0]);
@@ -66,6 +78,7 @@ describe("useMatch3Game", () => {
     });
 
     expect(result.current.gameState.isAnimating).toBe(false);
+    expect(result.current.gameState.animationPhase).toBe("idle");
     expect(gemTypeGrid(result.current.gameState.board)).toEqual(initialLayout);
   });
 
@@ -127,9 +140,15 @@ describe("useMatch3Game", () => {
 
     const { result } = renderHook(() => useMatch3Game());
 
-    // Fire the swipe, then advance past swap + first cascade highlight
+    // Fire the swipe and verify the orchestration exposes the swap phase.
     await act(async () => {
       void result.current.handleSwipe(someSwipe.from, someSwipe.to);
+      await Promise.resolve();
+    });
+    expect(result.current.gameState.animationPhase).toBe("swap");
+
+    // Advance past the swap and first cascade highlight.
+    await act(async () => {
       await vi.advanceTimersByTimeAsync(TIMING_CONFIG.swapDuration + 1);
       await vi.advanceTimersByTimeAsync(TIMING_CONFIG.matchClearDelay + 1);
     });
@@ -137,6 +156,7 @@ describe("useMatch3Game", () => {
     // After step 1's highlight, the score has ticked but the cascade is
     // still running (dropAnimationWait pending)
     expect(result.current.gameState.score).toBe(300); // 300 * 1
+    expect(result.current.gameState.animationPhase).toBe("drop");
 
     // Advance through the drop wait and step 2's highlight
     await act(async () => {
@@ -146,8 +166,46 @@ describe("useMatch3Game", () => {
 
     // Step 2 uses comboMultiplier = 1.5: 300 + floor(400 * 1.5) = 900
     expect(result.current.gameState.score).toBe(900);
+    expect(result.current.gameState.animationPhase).toBe("drop");
     // Level tracks the running score
     expect(result.current.gameState.level).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TIMING_CONFIG.dropAnimationWait + 1);
+    });
+    expect(result.current.gameState.animationPhase).toBe("idle");
+    expect(result.current.gameState.isAnimating).toBe(false);
+  });
+
+  test("reduced motion skips transform animation waits", async () => {
+    const step: Match = {
+      positions: [
+        { row: 0, col: 0 },
+        { row: 0, col: 1 },
+        { row: 0, col: 2 },
+      ],
+      type: "red",
+      score: 300,
+    };
+
+    vi.mocked(useReducedMotion).mockReturnValue(true);
+    vi.mocked(gameLogic.isValidSwap).mockReturnValue(true);
+    vi.mocked(gameLogic.findMatches)
+      .mockReturnValueOnce([step])
+      .mockReturnValue([]);
+
+    const { result } = renderHook(() => useMatch3Game());
+    const startedAt = Date.now();
+
+    await act(async () => {
+      void result.current.handleSwipe(someSwipe.from, someSwipe.to);
+      await vi.runAllTimersAsync();
+    });
+
+    expect(Date.now() - startedAt).toBe(TIMING_CONFIG.matchClearDelay);
+    expect(result.current.gameState.score).toBe(300);
+    expect(result.current.gameState.animationPhase).toBe("idle");
+    expect(result.current.gameState.isAnimating).toBe(false);
   });
 
   describe("handleGemTap state machine", () => {
@@ -300,6 +358,7 @@ describe("useMatch3Game", () => {
     });
 
     expect(result.current.gameState.score).toBe(300);
+    expect(result.current.gameState.animationPhase).toBe("drop");
 
     // Interrupt with New Game while the cascade is mid-loop
     act(() => {
@@ -307,6 +366,7 @@ describe("useMatch3Game", () => {
     });
 
     expect(result.current.gameState.score).toBe(0);
+    expect(result.current.gameState.animationPhase).toBe("idle");
     const boardAfterNewGame = gemTypeGrid(result.current.gameState.board);
 
     // Drain everything: the stale loop should return without committing

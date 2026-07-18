@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo } from "react";
 
 import { GemComponent } from "@/components/GemComponent";
-import type { Gem, Position } from "@/types/game";
+import type { AnimationPhase, Gem, Position } from "@/types/game";
+import { getGemInitial, getGravityTransition } from "@/utils/gemAnimation";
 
 /**
  * The `useGesture` return type: given a cell's (row, col) it produces the
@@ -27,6 +28,7 @@ export interface BoardCellProps {
   colIndex: number;
   isSelected: boolean;
   isAnimating: boolean;
+  animationPhase?: AnimationPhase;
   bind: CellBindFn;
   /**
    * Fires for keyboard activation only. Pointer taps are routed through
@@ -50,6 +52,7 @@ const BoardCellImpl = ({
   colIndex,
   isSelected,
   isAnimating,
+  animationPhase = "idle",
   bind,
   onActivate,
 }: BoardCellProps) => {
@@ -57,7 +60,7 @@ const BoardCellImpl = ({
     <div
       aria-colindex={colIndex + 1}
       aria-rowindex={rowIndex + 1}
-      className="aspect-square rounded-lg bg-gray-700/80 p-1"
+      className="aspect-square rounded-lg bg-gray-700/80"
       role="gridcell"
     >
       <AnimatePresence mode="popLayout">
@@ -69,13 +72,16 @@ const BoardCellImpl = ({
           >
             <motion.div
               key={gem.id}
-              className="h-full w-full"
+              className="h-full w-full p-1"
               layout
               layoutId={`gem-${gem.id}`}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
+              initial={getGemInitial(gem, animationPhase)}
+              animate={{ y: 0, scale: 1, opacity: 1 }}
               exit={{ scale: 0.4, opacity: 0 }}
-              transition={gemSpring}
+              transition={{
+                ...gemSpring,
+                ...getGravityTransition(gem, animationPhase),
+              }}
               whileHover={isAnimating ? undefined : { scale: 1.05 }}
               whileTap={isAnimating ? undefined : { scale: 0.95 }}
             >
@@ -125,5 +131,6 @@ export const BoardCell = memo(
   (prev, next) =>
     prev.gem === next.gem &&
     prev.isSelected === next.isSelected &&
-    prev.isAnimating === next.isAnimating,
+    prev.isAnimating === next.isAnimating &&
+    prev.animationPhase === next.animationPhase,
 );

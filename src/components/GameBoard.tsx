@@ -4,14 +4,15 @@ import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
-import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
-import type { Gem, Match, Position } from "@/types/game";
+import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
+import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
 import { computeParticleOrigin } from "@/utils/boardLayout";
 
 interface GameBoardProps {
   board: (Gem | null)[][];
   matches: Match[];
   selectedGem: Position | null;
+  animationPhase: AnimationPhase;
   onSwipe: (from: Position, to: Position) => void;
   onGemTap: (position: Position) => void;
   isAnimating: boolean;
@@ -21,6 +22,7 @@ export const GameBoard = ({
   board,
   matches,
   selectedGem,
+  animationPhase,
   onSwipe,
   onGemTap,
   isAnimating,
@@ -103,9 +105,12 @@ export const GameBoard = ({
         ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
-        className="mx-auto grid aspect-square w-full max-w-sm gap-1"
+        className="mx-auto grid aspect-square w-full max-w-sm overflow-hidden"
         role="grid"
-        style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
+        style={{
+          gap: `${BOARD_GAP_REM}rem`,
+          gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+        }}
       >
         {board.map((row, rowIndex) =>
           row.map((gem, colIndex) => (
@@ -118,6 +123,7 @@ export const GameBoard = ({
                 selectedGem?.row === rowIndex && selectedGem?.col === colIndex
               }
               isAnimating={isAnimating}
+              animationPhase={animationPhase}
               bind={bind}
               onActivate={onGemTap}
             />

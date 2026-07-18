@@ -340,6 +340,23 @@ describe("Game Logic", () => {
       expect(newBoard[7][0].type).toBe("green");
     });
 
+    test("should derive each gem's fall distance independently", () => {
+      const board = createEmptyBoard();
+      board[0][0] = createGem("red", 0, 0);
+      board[2][0] = createGem("blue", 2, 0);
+      board[5][0] = createGem("green", 5, 0);
+      board[7][0] = createGem("yellow", 7, 0);
+
+      const newBoard = applyGravity(board);
+
+      expect(newBoard.slice(4).map((row) => row[0].fallDistance)).toEqual([
+        4,
+        3,
+        1,
+        undefined,
+      ]);
+    });
+
     test("should update gem positions after falling", () => {
       const board = createEmptyBoard();
       board[0][0] = createGem("red", 0, 0);
@@ -416,6 +433,26 @@ describe("Game Logic", () => {
       expect(newBoard[0][0].entersFromAbove).toBe(true);
       expect(newBoard[6][0].fallDistance).toBe(7);
       expect(newBoard[7][0].entersFromAbove).toBeUndefined();
+    });
+
+    test("should support every refill distance from one cell to a full column", () => {
+      for (let emptyCount = 1; emptyCount <= 8; emptyCount++) {
+        const board = createEmptyBoard();
+        for (let row = emptyCount; row < 8; row++) {
+          board[row][0] = createGem("red", row, 0);
+        }
+
+        const newBoard = fillEmptySpaces(board);
+
+        for (let row = 0; row < emptyCount; row++) {
+          expect(newBoard[row][0].fallDistance).toBe(emptyCount);
+          expect(newBoard[row][0].entersFromAbove).toBe(true);
+        }
+        for (let row = emptyCount; row < 8; row++) {
+          expect(newBoard[row][0].fallDistance).toBeUndefined();
+          expect(newBoard[row][0].entersFromAbove).toBeUndefined();
+        }
+      }
     });
   });
 

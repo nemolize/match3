@@ -1,7 +1,13 @@
+import { MotionConfig } from "motion/react";
+
 import { Match3Game } from "@/components/Match3Game";
 
 const App = () => {
-  return <Match3Game />;
+  return (
+    <MotionConfig reducedMotion="user">
+      <Match3Game />
+    </MotionConfig>
+  );
 };
 
 export default App;

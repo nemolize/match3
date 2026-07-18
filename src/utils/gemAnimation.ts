@@ -1,4 +1,5 @@
 import { TIMING_CONFIG } from "@/config/timing";
+import { BOARD_GAP_REM } from "@/constants/game";
 import type { AnimationPhase, Gem } from "@/types/game";
 
 export const gravityEase = (progress: number): number => progress * progress;
@@ -32,9 +33,9 @@ export const getGemInitial = (gem: Gem, animationPhase: AnimationPhase) => {
   }
 
   return {
-    // The motion wrapper spans one full grid track; only the grid's gap-1
+    // The motion wrapper spans one full grid track; the shared grid gap
     // sits outside its 100% transform distance.
-    y: `calc(-${gem.fallDistance * 100}% - ${gem.fallDistance * 0.25}rem)`,
+    y: `calc(-${gem.fallDistance * 100}% - ${gem.fallDistance * BOARD_GAP_REM}rem)`,
     scale: 1,
     opacity: 1,
   };

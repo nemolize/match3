@@ -1,6 +1,7 @@
 import type { GemType } from "@/types/game";
 
 export const BOARD_SIZE = 8;
+export const BOARD_GAP_REM = 0.25;
 export const MIN_MATCH_LENGTH = 3;
 // Drag distance (px) at which a swipe fires. Swipes trigger mid-drag, so
 // this is the full input latency budget — smaller = snappier, but too small

@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
-import { BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
+import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
 import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
 import { computeParticleOrigin } from "@/utils/boardLayout";
 
@@ -105,9 +105,12 @@ export const GameBoard = ({
         ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
-        className="mx-auto grid aspect-square w-full max-w-sm gap-1 overflow-hidden"
+        className="mx-auto grid aspect-square w-full max-w-sm overflow-hidden"
         role="grid"
-        style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}
+        style={{
+          gap: `${BOARD_GAP_REM}rem`,
+          gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+        }}
       >
         {board.map((row, rowIndex) =>
           row.map((gem, colIndex) => (

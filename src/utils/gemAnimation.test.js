@@ -39,6 +39,13 @@ describe("gemAnimation", () => {
     expect(getGravityTransition(fallingGem, "drop")).toHaveProperty("layout");
   });
 
+  test("keeps existing gems visible when their drop starts", () => {
+    expect(getGemInitial(fallingGem, "drop")).toEqual({
+      scale: 1,
+      opacity: 1,
+    });
+  });
+
   test("starts refill gems above the board with the gravity tween on y", () => {
     const refillGem = { ...fallingGem, entersFromAbove: true };
 

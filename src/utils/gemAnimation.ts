@@ -25,6 +25,14 @@ export const getGravityTransition = (
 
 export const getGemInitial = (gem: Gem, animationPhase: AnimationPhase) => {
   if (
+    animationPhase === "drop" &&
+    gem.fallDistance !== undefined &&
+    gem.entersFromAbove !== true
+  ) {
+    return { scale: 1, opacity: 1 };
+  }
+
+  if (
     animationPhase !== "drop" ||
     gem.entersFromAbove !== true ||
     gem.fallDistance === undefined

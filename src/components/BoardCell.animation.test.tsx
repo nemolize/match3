@@ -60,7 +60,7 @@ describe("BoardCell gravity animation", () => {
     renderCell(fallingGem);
 
     const props = motionPropsSpy.mock.lastCall?.[0];
-    expect(props.initial).toEqual({ scale: 0.8, opacity: 0 });
+    expect(props.initial).toEqual({ scale: 1, opacity: 1 });
     expect(props.transition).toHaveProperty("layout");
     expect(props.transition).not.toHaveProperty("y");
   });

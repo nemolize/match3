@@ -13,26 +13,36 @@ const createBoard = (): (Gem | null)[][] =>
     Array<Gem | null>(BOARD_SIZE).fill(null),
   );
 
-const createGem = (id: string, row: number): Gem => ({
+const createGem = (id: string, row: number, type: Gem["type"]): Gem => ({
   id,
-  type: "red",
+  type,
   position: { row, col: 0 },
 });
 
 const initialBoard = createBoard();
-for (let row = 3; row < BOARD_SIZE; row++) {
+for (let row = 0; row < BOARD_SIZE - 3; row++) {
   const boardRow = initialBoard[row];
-  if (boardRow) boardRow[0] = createGem(`existing-${row}`, row);
+  if (boardRow) boardRow[0] = createGem(`existing-${row}`, row, "blue");
 }
 
-const droppedBoard = initialBoard.map((row) => [...row]);
+const droppedBoard = createBoard();
 for (let row = 0; row < 3; row++) {
   const boardRow = droppedBoard[row];
   if (boardRow) {
     boardRow[0] = {
-      ...createGem(`refill-${row}`, row),
+      ...createGem(`refill-${row}`, row, "red"),
       fallDistance: 3,
       entersFromAbove: true,
+    };
+  }
+}
+for (let row = 3; row < BOARD_SIZE; row++) {
+  const sourceRow = row - 3;
+  const boardRow = droppedBoard[row];
+  if (boardRow) {
+    boardRow[0] = {
+      ...createGem(`existing-${sourceRow}`, row, "blue"),
+      fallDistance: 3,
     };
   }
 }

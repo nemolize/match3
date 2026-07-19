@@ -123,6 +123,43 @@ test("clips refill gems while they fall in from above the board", async ({
   });
 });
 
+test("keeps existing gems visible while they fall", async ({ page }) => {
+  await page.goto("/e2e-tests/fixtures/drop.html");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Start drop" }).click();
+
+  await page.waitForFunction(
+    () =>
+      Array.from(
+        document.querySelectorAll(
+          'button[aria-label="Paraiba tourmaline gem"]',
+        ),
+      ).some((gem) => {
+        const motionWrapper = gem.parentElement;
+        return (
+          motionWrapper instanceof HTMLElement &&
+          getComputedStyle(motionWrapper).transform !== "none"
+        );
+      }),
+    undefined,
+    { timeout: 2500 },
+  );
+
+  const opacities = await page
+    .getByRole("button", { name: "Paraiba tourmaline gem" })
+    .evaluateAll((gems) =>
+      gems.map((gem) => {
+        const motionWrapper = gem.parentElement;
+        return motionWrapper instanceof HTMLElement
+          ? Number(getComputedStyle(motionWrapper).opacity)
+          : 0;
+      }),
+    );
+
+  expect(opacities).toHaveLength(5);
+  expect(opacities.every((opacity) => opacity === 1)).toBe(true);
+});
+
 test.describe("mobile layout", () => {
   test.use(iPhoneSE);
 

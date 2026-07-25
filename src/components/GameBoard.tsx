@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
-import { StarfieldBackground } from "@/components/StarfieldBackground";
+import { UnderwaterBackground } from "@/components/UnderwaterBackground";
 import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
 import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
 import { computeParticleOrigin } from "@/utils/boardLayout";
@@ -105,7 +105,7 @@ export const GameBoard = ({
       {/* Board-scoped animated backdrop. NOT `overflow-hidden` on this
           panel — BreakingGemsLayer particles fly past its edge by design;
           the canvas clips itself with its own rounded corners. */}
-      <StarfieldBackground />
+      <UnderwaterBackground />
       <div
         ref={boardRef}
         aria-colcount={BOARD_SIZE}

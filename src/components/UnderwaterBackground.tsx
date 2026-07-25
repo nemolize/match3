@@ -1,25 +1,25 @@
 import { useEffect, useRef } from "react";
 
 import {
-  drawNebulaWisps,
-  drawStars,
-  type DustParticle,
-  makeDustParticle,
-  makeStars,
-  updateAndDrawDust,
-} from "@/utils/starfieldLogic";
+  type Bubble,
+  causticBufferSize,
+  drawGodRays,
+  makeBubble,
+  renderCaustics,
+  updateAndDrawBubbles,
+} from "@/utils/underwaterLogic";
 
-const DUST_COUNT = 60;
+const BUBBLE_COUNT = 26;
 
 /**
- * Animated starfield canvas scoped to its offset parent: it fills the
+ * Animated sunlit-water canvas scoped to its offset parent: it fills the
  * nearest positioned ancestor (`absolute inset-0`) and sizes its bitmap
  * to that element via ResizeObserver, so it can back any container —
  * currently the game board panel. The parent must be positioned
  * (`relative`) and should set `isolate` so the `-z-10` canvas paints
  * above the parent's own background instead of escaping behind it.
  */
-export const StarfieldBackground = () => {
+export const UnderwaterBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -37,8 +37,16 @@ export const StarfieldBackground = () => {
     let elapsed = 0;
     let lastTime = performance.now();
 
-    const stars = makeStars();
-    let dust: DustParticle[] = [];
+    let bubbles: Bubble[] = [];
+
+    // The caustics are rendered per-pixel into this small buffer and
+    // blitted upscaled — see renderCaustics for why.
+    const causticCanvas = document.createElement("canvas");
+    const causticCtx = causticCanvas.getContext("2d");
+    let causticImage: ImageData | null = null;
+    // The buffer is only re-rendered every other frame (water shimmer
+    // reads fine at 30Hz); the blit below still happens every frame.
+    let causticParity = false;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -46,26 +54,33 @@ export const StarfieldBackground = () => {
       const width = canvas.width / (window.devicePixelRatio || 1);
       const height = canvas.height / (window.devicePixelRatio || 1);
 
-      const hue1 = 260 + Math.sin(elapsed * 0.00036) * 30;
-      const hue2 = 220 + Math.cos(elapsed * 0.00024) * 30;
-
-      const grad = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.4,
-        0,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.85,
-      );
-      grad.addColorStop(0, `hsl(${hue1}, 70%, 22%)`);
-      grad.addColorStop(0.5, `hsl(${(hue1 + hue2) / 2}, 75%, 13%)`);
-      grad.addColorStop(1, `hsl(${hue2}, 80%, 7%)`);
+      // Bright near the surface, deepening downward; a slow hue breath
+      // keeps the water feeling alive without strobing.
+      const breathe = Math.sin(elapsed * 0.0003) * 4;
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, `hsl(${186 + breathe}, 85%, 58%)`);
+      grad.addColorStop(0.55, `hsl(${196 + breathe}, 85%, 38%)`);
+      grad.addColorStop(1, `hsl(${208 + breathe}, 80%, 22%)`);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
 
-      drawStars(ctx, stars, width, height, deltaMs);
-      updateAndDrawDust(ctx, dust, width, height, deltaMs);
-      drawNebulaWisps(ctx, width, height, elapsed, hue1);
+      drawGodRays(ctx, width, height, elapsed);
+      if (causticCtx && causticImage) {
+        causticParity = !causticParity;
+        // deltaMs === 0 is the reduced-motion / just-resized static
+        // frame — always render that one.
+        if (causticParity || deltaMs === 0) {
+          renderCaustics(
+            causticImage.data,
+            causticImage.width,
+            causticImage.height,
+            elapsed,
+          );
+          causticCtx.putImageData(causticImage, 0, 0);
+        }
+        ctx.drawImage(causticCanvas, 0, 0, width, height);
+      }
+      updateAndDrawBubbles(ctx, bubbles, width, height, deltaMs);
     };
 
     const resize = () => {
@@ -81,15 +96,17 @@ export const StarfieldBackground = () => {
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Screen-space trail anchors are stale after a resize; re-anchor next frame.
-      for (const star of stars) {
-        star.prev = null;
+      if (bubbles.length === 0) {
+        bubbles = Array.from({ length: BUBBLE_COUNT }, () =>
+          makeBubble(width, height, true),
+        );
       }
 
-      if (dust.length === 0) {
-        dust = Array.from({ length: DUST_COUNT }, () =>
-          makeDustParticle(Math.random() * width, Math.random() * height),
-        );
+      if (causticCtx) {
+        const buf = causticBufferSize(width, height);
+        causticCanvas.width = buf.w;
+        causticCanvas.height = buf.h;
+        causticImage = causticCtx.createImageData(buf.w, buf.h);
       }
 
       // Resizing clears the bitmap; with the loop parked we must repaint
@@ -137,13 +154,14 @@ export const StarfieldBackground = () => {
     };
   }, []);
 
-  // bg-[#050310] is the CSS fallback so a slow first paint (or a failed
-  // canvas context) shows deep space instead of a white flash.
+  // bg-[#1494bf] is the CSS fallback (the gradient's mid tone) so a slow
+  // first paint (or a failed canvas context) shows water instead of a
+  // white flash.
   return (
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="absolute inset-0 -z-10 h-full w-full rounded-2xl bg-[#050310]"
+      className="absolute inset-0 -z-10 h-full w-full rounded-2xl bg-[#1494bf]"
     />
   );
 };

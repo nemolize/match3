@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 
-import { createParticles, updateParticles } from "./particleLogic";
+import {
+  createParticles,
+  updateParticles,
+  updateParticlesInPlace,
+} from "./particleLogic";
 
 const CELL_PADDING = 4;
 
@@ -130,6 +134,37 @@ describe("particleLogic", () => {
   });
 
   describe("updateParticles", () => {
+    test("should update the renderer-owned particles without allocating replacements", () => {
+      const particles = [
+        {
+          id: "1",
+          x: 100,
+          y: 100,
+          vx: 5,
+          vy: 3,
+          rotation: 0,
+          rotationSpeed: 10,
+          size: 10,
+          opacity: 1,
+        },
+      ];
+      const particle = particles[0];
+
+      updateParticlesInPlace({
+        particles,
+        elapsed: 500,
+        lifetime: 1000,
+      });
+
+      expect(particles[0]).toBe(particle);
+      expect(particle.x).toBe(105);
+      expect(particle.y).toBe(103);
+      expect(particle.vx).toBe(5 * 0.98);
+      expect(particle.vy).toBe(3.5);
+      expect(particle.rotation).toBe(10);
+      expect(particle.opacity).toBe(0.5);
+    });
+
     test("should update particle positions based on velocity", () => {
       const initialParticles = [
         {

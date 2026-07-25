@@ -6,7 +6,7 @@ import {
   createParticles,
   GEM_PARTICLE_COLORS,
   type Particle,
-  updateParticles as updateParticlesLogic,
+  updateParticlesInPlace,
 } from "@/utils/particleLogic";
 
 // Cap the per-frame integration step at ~4 frames of 60fps (~67ms). Bigger
@@ -45,10 +45,14 @@ export const GemParticles = ({
   // Rendered once; every later frame mutates these elements imperatively.
   // React re-renders (from the parent) diff against the same initial style
   // values, so they never clobber the imperative writes.
-  const [initialParticles] = useState<Particle[]>(() =>
-    createParticles({ x, y, size }),
-  );
-  const particlesRef = useRef<Particle[]>(initialParticles);
+  const [{ initialParticles, simulationParticles }] = useState(() => {
+    const particles = createParticles({ x, y, size });
+    return {
+      initialParticles: particles,
+      simulationParticles: particles.map((particle) => ({ ...particle })),
+    };
+  });
+  const particlesRef = useRef<Particle[]>(simulationParticles);
   const elementsRef = useRef<(HTMLElement | null)[]>([]);
 
   // Keep the latest callback in a ref so the animation timer below is not
@@ -81,7 +85,7 @@ export const GemParticles = ({
       const deltaMs = Math.min(rawDeltaMs, MAX_DELTA_MS);
       lastTime = now;
 
-      particlesRef.current = updateParticlesLogic({
+      updateParticlesInPlace({
         particles: particlesRef.current,
         elapsed,
         deltaMs,

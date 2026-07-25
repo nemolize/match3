@@ -62,6 +62,26 @@ export interface UpdateParticlesOptions {
   deltaMs?: number; // Time since the previous update in milliseconds
 }
 
+export const updateParticlesInPlace = ({
+  particles,
+  elapsed,
+  lifetime = TIMING_CONFIG.particleLifetime,
+  deltaMs = BASE_FRAME_MS,
+}: UpdateParticlesOptions): void => {
+  const dt = deltaMs / BASE_FRAME_MS;
+  const velocityDecay = Math.pow(AIR_RESISTANCE, dt);
+  const opacity = Math.max(0, 1 - elapsed / lifetime);
+
+  for (const particle of particles) {
+    particle.x += particle.vx * dt;
+    particle.y += particle.vy * dt;
+    particle.vx *= velocityDecay;
+    particle.vy += GRAVITY * dt;
+    particle.rotation += particle.rotationSpeed * dt;
+    particle.opacity = opacity;
+  }
+};
+
 /**
  * Updates particle positions, velocities, and opacity based on physics
  * simulation. Physics constants are tuned in 60fps-frame units; `deltaMs`
@@ -74,17 +94,14 @@ export const updateParticles = ({
   lifetime = TIMING_CONFIG.particleLifetime,
   deltaMs = BASE_FRAME_MS,
 }: UpdateParticlesOptions): Particle[] => {
-  const dt = deltaMs / BASE_FRAME_MS;
-
-  return particles.map((particle) => ({
-    ...particle,
-    x: particle.x + particle.vx * dt,
-    y: particle.y + particle.vy * dt,
-    vx: particle.vx * Math.pow(AIR_RESISTANCE, dt),
-    vy: particle.vy + GRAVITY * dt,
-    rotation: particle.rotation + particle.rotationSpeed * dt,
-    opacity: Math.max(0, 1 - elapsed / lifetime),
-  }));
+  const updatedParticles = particles.map((particle) => ({ ...particle }));
+  updateParticlesInPlace({
+    particles: updatedParticles,
+    elapsed,
+    lifetime,
+    deltaMs,
+  });
+  return updatedParticles;
 };
 
 export const GEM_PARTICLE_COLORS: Record<GemType, string> = {

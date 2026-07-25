@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import {
   type Bubble,
@@ -10,6 +10,12 @@ import {
 } from "@/utils/underwaterLogic";
 
 const BUBBLE_COUNT = 26;
+const BACKGROUND_FRAME_MS = 1000 / 30;
+const MAX_BACKGROUND_DPR = 2;
+
+interface UnderwaterBackgroundProps {
+  isForegroundBusy?: boolean;
+}
 
 /**
  * Animated sunlit-water canvas scoped to its offset parent: it fills the
@@ -19,8 +25,15 @@ const BUBBLE_COUNT = 26;
  * (`relative`) and should set `isolate` so the `-z-10` canvas paints
  * above the parent's own background instead of escaping behind it.
  */
-export const UnderwaterBackground = () => {
+export const UnderwaterBackground = ({
+  isForegroundBusy = false,
+}: UnderwaterBackgroundProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const foregroundBusyRef = useRef(isForegroundBusy);
+
+  useLayoutEffect(() => {
+    foregroundBusyRef.current = isForegroundBusy;
+  }, [isForegroundBusy]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,12 +43,15 @@ export const UnderwaterBackground = () => {
     const host = canvas.offsetParent;
     if (!(host instanceof HTMLElement)) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     let animId = 0;
     let elapsed = 0;
     let lastTime = performance.now();
+    let drawAccumulator = 0;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
 
     let bubbles: Bubble[] = [];
 
@@ -44,15 +60,16 @@ export const UnderwaterBackground = () => {
     const causticCanvas = document.createElement("canvas");
     const causticCtx = causticCanvas.getContext("2d");
     let causticImage: ImageData | null = null;
-    // The buffer is only re-rendered every other frame (water shimmer
-    // reads fine at 30Hz); the blit below still happens every frame.
+    // The buffer is only re-rendered every other background frame (water
+    // shimmer reads fine at 15Hz); the blit below still happens every draw.
     let causticParity = false;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const drawFrame = (deltaMs: number) => {
-      const width = canvas.width / (window.devicePixelRatio || 1);
-      const height = canvas.height / (window.devicePixelRatio || 1);
+    const drawFrame = (deltaMs: number, refreshCaustics = true) => {
+      const width = canvasWidth;
+      const height = canvasHeight;
+      if (width === 0 || height === 0) return;
 
       // Bright near the surface, deepening downward; a slow hue breath
       // keeps the water feeling alive without strobing.
@@ -66,17 +83,19 @@ export const UnderwaterBackground = () => {
 
       drawGodRays(ctx, width, height, elapsed);
       if (causticCtx && causticImage) {
-        causticParity = !causticParity;
-        // deltaMs === 0 is the reduced-motion / just-resized static
-        // frame — always render that one.
-        if (causticParity || deltaMs === 0) {
-          renderCaustics(
-            causticImage.data,
-            causticImage.width,
-            causticImage.height,
-            elapsed,
-          );
-          causticCtx.putImageData(causticImage, 0, 0);
+        if (refreshCaustics) {
+          causticParity = !causticParity;
+          // deltaMs === 0 is the reduced-motion / just-resized static
+          // frame — always render that one.
+          if (causticParity || deltaMs === 0) {
+            renderCaustics(
+              causticImage.data,
+              causticImage.width,
+              causticImage.height,
+              elapsed,
+            );
+            causticCtx.putImageData(causticImage, 0, 0);
+          }
         }
         ctx.drawImage(causticCanvas, 0, 0, width, height);
       }
@@ -84,7 +103,7 @@ export const UnderwaterBackground = () => {
     };
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_BACKGROUND_DPR);
       // clientWidth/Height = the padding box, which is exactly what the
       // `inset-0` canvas spans (a ResizeObserver entry's contentRect is
       // the content box, which excludes the panel's padding).
@@ -92,6 +111,8 @@ export const UnderwaterBackground = () => {
       const height = host.clientHeight;
       if (width === 0 || height === 0) return;
 
+      canvasWidth = width;
+      canvasHeight = height;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -109,11 +130,8 @@ export const UnderwaterBackground = () => {
         causticImage = causticCtx.createImageData(buf.w, buf.h);
       }
 
-      // Resizing clears the bitmap; with the loop parked we must repaint
-      // the static frame ourselves.
-      if (reducedMotion.matches) {
-        drawFrame(0);
-      }
+      // Assigning bitmap dimensions clears the opaque canvas to black.
+      drawFrame(0, !foregroundBusyRef.current);
     };
 
     const observer = new ResizeObserver(resize);
@@ -125,8 +143,13 @@ export const UnderwaterBackground = () => {
       const deltaMs = Math.min(now - lastTime, 50);
       lastTime = now;
       elapsed += deltaMs;
+      drawAccumulator += deltaMs;
 
-      drawFrame(deltaMs);
+      if (drawAccumulator >= BACKGROUND_FRAME_MS) {
+        const drawDeltaMs = drawAccumulator;
+        drawAccumulator = 0;
+        drawFrame(drawDeltaMs, !foregroundBusyRef.current);
+      }
       animId = requestAnimationFrame(loop);
     };
 
@@ -136,6 +159,7 @@ export const UnderwaterBackground = () => {
         return;
       }
       lastTime = performance.now();
+      drawAccumulator = 0;
       animId = requestAnimationFrame(loop);
     };
 

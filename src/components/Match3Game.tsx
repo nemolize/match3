@@ -2,13 +2,15 @@ import { motion } from "motion/react";
 
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
+import { StarfieldBackground } from "@/components/StarfieldBackground";
 import { useMatch3Game } from "@/hooks/useMatch3Game";
 
 export const Match3Game = () => {
   const { gameState, handleSwipe, handleGemTap, newGame } = useMatch3Game();
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-3 py-2 sm:min-h-screen sm:p-4">
+    <div className="flex min-h-svh flex-col items-center justify-center px-3 py-2 sm:min-h-screen sm:p-4">
+      <StarfieldBackground />
       <motion.div
         className="relative w-full max-w-md"
         initial={{ opacity: 0, scale: 0.8 }}

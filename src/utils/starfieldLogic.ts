@@ -18,9 +18,9 @@ export interface DustParticle {
 
 const BASE_FRAME_MS = 1000 / 60;
 
-const STAR_COUNT = 180;
-const STAR_SPEED = 0.0018;
-const NEBULA_WISP_COUNT = 3;
+const STAR_COUNT = 260;
+const STAR_SPEED = 0.0042;
+const NEBULA_WISP_COUNT = 4;
 
 export const makeStars = (count = STAR_COUNT): Star[] =>
   Array.from({ length: count }, () => ({
@@ -68,15 +68,15 @@ export const drawStars = (
 
     const sx = (star.x / star.z) * cx + cx;
     const sy = (star.y / star.z) * cy + cy;
-    const size = Math.max(0.3, (1 - star.z) * 2.5);
-    const alpha = Math.min(1, (1 - star.z) * 1.4);
+    const size = Math.max(0.3, (1 - star.z) * 3.2);
+    const alpha = Math.min(1, (1 - star.z) * 1.7);
 
     if (star.prev) {
       ctx.beginPath();
       ctx.moveTo(star.prev.x, star.prev.y);
       ctx.lineTo(sx, sy);
-      ctx.strokeStyle = `rgba(200, 220, 255, ${alpha * 0.7})`;
-      ctx.lineWidth = size * 0.5;
+      ctx.strokeStyle = `rgba(200, 220, 255, ${alpha * 0.85})`;
+      ctx.lineWidth = size * 0.7;
       ctx.stroke();
     }
 
@@ -127,7 +127,7 @@ export const updateAndDrawDust = (
 
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${p.hue}, 80%, 70%, ${alpha * 0.6})`;
+    ctx.fillStyle = `hsla(${p.hue}, 85%, 75%, ${alpha * 0.85})`;
     ctx.fill();
   }
 };
@@ -150,8 +150,8 @@ export const drawNebulaWisps = (
     const hue = baseHue + i * 40;
 
     const grad = ctx.createRadialGradient(wx, wy, 0, wx, wy, width * 0.22);
-    grad.addColorStop(0, `hsla(${hue}, 70%, 40%, 0.07)`);
-    grad.addColorStop(1, `hsla(${hue}, 70%, 40%, 0)`);
+    grad.addColorStop(0, `hsla(${hue}, 80%, 48%, 0.16)`);
+    grad.addColorStop(1, `hsla(${hue}, 80%, 48%, 0)`);
 
     ctx.beginPath();
     ctx.ellipse(

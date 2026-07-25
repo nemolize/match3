@@ -5,13 +5,14 @@ import { GemParticles } from "@/components/GemParticles";
 import { TIMING_CONFIG } from "@/config/timing";
 
 /**
- * Extract each particle element's inline `left` position so the tests can
- * observe that motion is progressing (they don't need exact pixel values —
- * physics is unit-tested elsewhere; here we assert continuity).
+ * Extract each particle element's inline `transform` (position + rotation)
+ * so the tests can observe that motion is progressing (they don't need
+ * exact pixel values — physics is unit-tested elsewhere; here we assert
+ * continuity).
  */
-const readLefts = (container: HTMLElement) =>
+const readTransforms = (container: HTMLElement) =>
   [...container.querySelectorAll<HTMLElement>("div[style]")]
-    .map((el) => el.style.left)
+    .map((el) => el.style.transform)
     .filter((s) => s !== "");
 
 describe("GemParticles", () => {
@@ -43,8 +44,8 @@ describe("GemParticles", () => {
     act(() => {
       vi.advanceTimersByTime(TIMING_CONFIG.particleLifetime / 2);
     });
-    const halfwayLefts = readLefts(container);
-    expect(halfwayLefts.length).toBeGreaterThan(0);
+    const halfwayTransforms = readTransforms(container);
+    expect(halfwayTransforms.length).toBeGreaterThan(0);
 
     // Now swap the callback identity mid-flight. The critical guarantee:
     // the effect is NOT re-run, so the startTime clock is untouched.
@@ -61,7 +62,7 @@ describe("GemParticles", () => {
 
     // Positions right after rerender must equal the pre-rerender snapshot:
     // no restart means no `createParticles` re-seed.
-    expect(readLefts(container)).toEqual(halfwayLefts);
+    expect(readTransforms(container)).toEqual(halfwayTransforms);
 
     // Advance past the remaining lifetime; onComplete2 (the current ref)
     // fires, onComplete1 (stale) does not.
@@ -85,20 +86,20 @@ describe("GemParticles", () => {
     );
 
     // Snapshot at t≈0, mid, later. Positions must change; particles have
-    // non-zero velocity so `left` cannot be identical across snapshots.
-    const t0 = readLefts(container);
+    // non-zero velocity so `transform` cannot be identical across snapshots.
+    const t0 = readTransforms(container);
     expect(t0.length).toBeGreaterThan(0);
 
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    const t1 = readLefts(container);
+    const t1 = readTransforms(container);
     expect(t1).not.toEqual(t0);
 
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    const t2 = readLefts(container);
+    const t2 = readTransforms(container);
     expect(t2).not.toEqual(t1);
   });
 });

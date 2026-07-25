@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { TIMING_CONFIG } from "@/config/timing";
@@ -14,6 +13,17 @@ import {
 // gaps than that are almost always the tab having been backgrounded or a
 // major jank spike, not real frame time we want to simulate through.
 const MAX_DELTA_MS = (1000 / 60) * 4;
+
+// Per-frame values are written straight to the DOM (see the rAF loop
+// below), bypassing React: routing them through setState forced a reconcile
+// of every particle on every frame, which under load (cascades, weak CPUs)
+// overflowed the frame budget and made burst speed visibly unstable.
+const applyParticleStyle = (element: HTMLElement, particle: Particle) => {
+  element.style.transform = `translate(${particle.x - particle.size / 2}px, ${
+    particle.y - particle.size / 2
+  }px) rotate(${particle.rotation}deg)`;
+  element.style.opacity = String(particle.opacity);
+};
 
 interface GemParticlesProps {
   id: string;
@@ -32,9 +42,14 @@ export const GemParticles = ({
   size,
   onComplete,
 }: GemParticlesProps) => {
-  const [particles, setParticles] = useState<Particle[]>(() =>
+  // Rendered once; every later frame mutates these elements imperatively.
+  // React re-renders (from the parent) diff against the same initial style
+  // values, so they never clobber the imperative writes.
+  const [initialParticles] = useState<Particle[]>(() =>
     createParticles({ x, y, size }),
   );
+  const particlesRef = useRef<Particle[]>(initialParticles);
+  const elementsRef = useRef<(HTMLElement | null)[]>([]);
 
   // Keep the latest callback in a ref so the animation timer below is not
   // reset when the parent re-renders with a new callback identity.
@@ -66,9 +81,15 @@ export const GemParticles = ({
       const deltaMs = Math.min(rawDeltaMs, MAX_DELTA_MS);
       lastTime = now;
 
-      setParticles((prevParticles) =>
-        updateParticlesLogic({ particles: prevParticles, elapsed, deltaMs }),
-      );
+      particlesRef.current = updateParticlesLogic({
+        particles: particlesRef.current,
+        elapsed,
+        deltaMs,
+      });
+      particlesRef.current.forEach((particle, i) => {
+        const element = elementsRef.current[i];
+        if (element) applyParticleStyle(element, particle);
+      });
 
       animationFrame = requestAnimationFrame(animate);
     };
@@ -84,19 +105,22 @@ export const GemParticles = ({
 
   return (
     <div className="pointer-events-none absolute inset-0">
-      {particles.map((particle) => (
-        <motion.div
+      {initialParticles.map((particle, i) => (
+        <div
           key={particle.id}
-          className="absolute rounded-sm"
+          ref={(element) => {
+            elementsRef.current[i] = element;
+          }}
+          className="absolute top-0 left-0 rounded-sm"
           style={{
-            left: particle.x - particle.size / 2,
-            top: particle.y - particle.size / 2,
             width: particle.size,
             height: particle.size,
             backgroundColor: color,
-            opacity: particle.opacity,
-            transform: `rotate(${particle.rotation}deg)`,
             boxShadow: `0 0 ${particle.size / 2}px ${color}`,
+            transform: `translate(${particle.x - particle.size / 2}px, ${
+              particle.y - particle.size / 2
+            }px) rotate(${particle.rotation}deg)`,
+            opacity: particle.opacity,
           }}
         />
       ))}

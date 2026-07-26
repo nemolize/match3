@@ -106,8 +106,6 @@ describe("UnderwaterBackground", () => {
     );
     const canvas = container.querySelector("canvas");
     if (!canvas) throw new Error("Expected an underwater canvas");
-    expect(canvas).toHaveAttribute("data-renderer", "canvas2d");
-    expect(canvas).toHaveAttribute("data-renderer-status", "ready");
     const context = contexts.get(canvas);
     expect(context?.fillRect).toHaveBeenCalledTimes(1);
 

@@ -21,7 +21,5 @@
 
 # playwright
 /test-results/
-/performance-results/
-/.performance-dist/
 
 .wrangler/

@@ -17,7 +17,6 @@ interface GameBoardProps {
   onSwipe: (from: Position, to: Position) => void;
   onGemTap: (position: Position) => void;
   isAnimating: boolean;
-  particleRandom?: () => number;
 }
 
 export const GameBoard = ({
@@ -28,7 +27,6 @@ export const GameBoard = ({
   onSwipe,
   onGemTap,
   isAnimating,
-  particleRandom,
 }: GameBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +111,6 @@ export const GameBoard = ({
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
         className="mx-auto grid aspect-square w-full max-w-sm overflow-hidden"
-        data-gem-renderer="dom"
         role="grid"
         style={{
           gap: `${BOARD_GAP_REM}rem`,
@@ -144,7 +141,6 @@ export const GameBoard = ({
         board={board}
         matches={matches}
         resolveOrigin={resolveParticleOrigin}
-        particleRandom={particleRandom}
       />
     </motion.div>
   );

@@ -12,11 +12,8 @@ const BASE_FRAME_MS = 1000 / 60;
 
 const GOD_RAY_COUNT = 4;
 
-/** Screen px per caustic-buffer px. The buffer is rendered per-pixel and
- * upscaled with canvas smoothing, so this is the per-frame cost driver:
- * 5 keeps a ~450px board around ~7.5k samples (measured ~2ms in V8;
- * the component additionally only re-renders the buffer every other
- * frame, halving the average). */
+/** Screen px per caustic-buffer px. A scale of 5 keeps a ~450px board near
+ * 7.5k samples before the component's every-other-frame update cadence. */
 const CAUSTIC_SCALE = 5;
 
 /** Warp-iteration depth of the caustic field. More iterations = finer

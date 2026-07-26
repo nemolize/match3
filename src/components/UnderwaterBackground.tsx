@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   type Bubble,
@@ -30,6 +30,9 @@ export const UnderwaterBackground = ({
 }: UnderwaterBackgroundProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const foregroundBusyRef = useRef(isForegroundBusy);
+  const [rendererStatus, setRendererStatus] = useState<
+    "initializing" | "ready" | "unavailable"
+  >("initializing");
 
   useLayoutEffect(() => {
     foregroundBusyRef.current = isForegroundBusy;
@@ -41,10 +44,16 @@ export const UnderwaterBackground = ({
     // `inset-0` spans the offsetParent's padding box, so that element —
     // not the viewport — is the sizing source.
     const host = canvas.offsetParent;
-    if (!(host instanceof HTMLElement)) return;
+    if (!(host instanceof HTMLElement)) {
+      setRendererStatus("unavailable");
+      return;
+    }
 
     const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return;
+    if (!ctx) {
+      setRendererStatus("unavailable");
+      return;
+    }
 
     let animId = 0;
     let elapsed = 0;
@@ -169,6 +178,7 @@ export const UnderwaterBackground = ({
     };
 
     start();
+    setRendererStatus("ready");
     reducedMotion.addEventListener("change", handleMotionPreferenceChange);
 
     return () => {
@@ -186,6 +196,8 @@ export const UnderwaterBackground = ({
       ref={canvasRef}
       aria-hidden="true"
       className="absolute inset-0 -z-10 h-full w-full rounded-2xl bg-[#1494bf]"
+      data-renderer="canvas2d"
+      data-renderer-status={rendererStatus}
     />
   );
 };

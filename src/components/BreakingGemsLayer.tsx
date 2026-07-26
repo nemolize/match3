@@ -18,6 +18,7 @@ export interface BreakingGemsLayerProps {
    * stays decoupled from the rendered grid's DOM shape.
    */
   resolveOrigin: (row: number, col: number) => ParticleOrigin | null;
+  particleRandom?: () => number;
 }
 
 /**
@@ -29,6 +30,7 @@ export const BreakingGemsLayer = ({
   board,
   matches,
   resolveOrigin,
+  particleRandom,
 }: BreakingGemsLayerProps) => {
   const [breakingGems, setBreakingGems] = useState<BreakingGem[]>([]);
   const prevMatchesRef = useRef<Match[]>([]);
@@ -82,7 +84,7 @@ export const BreakingGemsLayer = ({
   }, []);
 
   return (
-    <>
+    <div className="contents" data-particle-renderer="dom">
       {breakingGems.map((breakingGem) => (
         <GemParticles
           key={breakingGem.id}
@@ -92,8 +94,9 @@ export const BreakingGemsLayer = ({
           y={breakingGem.y}
           size={breakingGem.size}
           onComplete={handleParticleComplete}
+          random={particleRandom}
         />
       ))}
-    </>
+    </div>
   );
 };

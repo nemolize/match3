@@ -21,6 +21,24 @@ describe("particleLogic", () => {
       expect(particles).toHaveLength(8);
     });
 
+    test("uses an injected random source for reproducible particles", () => {
+      const particles = createParticles({
+        x: 0,
+        y: 0,
+        size: 40,
+        count: 1,
+        random: () => 0.5,
+      });
+
+      expect(particles[0]).toMatchObject({
+        vx: 4.5,
+        vy: -2,
+        rotation: 180,
+        rotationSpeed: 0,
+        size: 12.5,
+      });
+    });
+
     test("should position particles at gem center accounting for cell padding", () => {
       const x = 100;
       const y = 200;

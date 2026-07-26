@@ -32,6 +32,7 @@ interface GemParticlesProps {
   y: number; // Position in pixels
   size: number; // Size of the gem in pixels
   onComplete: (id: string) => void;
+  random?: () => number;
 }
 
 export const GemParticles = ({
@@ -41,12 +42,13 @@ export const GemParticles = ({
   y,
   size,
   onComplete,
+  random,
 }: GemParticlesProps) => {
   // Rendered once; every later frame mutates these elements imperatively.
   // React re-renders (from the parent) diff against the same initial style
   // values, so they never clobber the imperative writes.
   const [{ initialParticles, simulationParticles }] = useState(() => {
-    const particles = createParticles({ x, y, size });
+    const particles = createParticles({ x, y, size, random });
     return {
       initialParticles: particles,
       simulationParticles: particles.map((particle) => ({ ...particle })),
@@ -108,7 +110,11 @@ export const GemParticles = ({
   const color = GEM_PARTICLE_COLORS[gemType];
 
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div
+      className="pointer-events-none absolute inset-0"
+      data-particle-burst=""
+      data-particle-count={initialParticles.length}
+    >
       {initialParticles.map((particle, i) => (
         <div
           key={particle.id}
@@ -116,6 +122,7 @@ export const GemParticles = ({
             elementsRef.current[i] = element;
           }}
           className="absolute top-0 left-0 rounded-sm"
+          data-particle=""
           style={{
             width: particle.size,
             height: particle.size,

@@ -24,6 +24,7 @@ export interface CreateParticlesOptions {
   y: number; // Cell top-left y position in pixels
   size: number; // Gem size in pixels (cell size minus padding)
   count?: number; // Number of particles to create
+  random?: () => number;
 }
 
 /**
@@ -35,10 +36,11 @@ export const createParticles = ({
   y,
   size,
   count = TIMING_CONFIG.particleCount,
+  random = Math.random,
 }: CreateParticlesOptions): Particle[] => {
   return Array.from({ length: count }, (_, i) => {
     const angle = (i / count) * Math.PI * 2;
-    const speed = 2 + Math.random() * INITIAL_VELOCITY_RANGE;
+    const speed = 2 + random() * INITIAL_VELOCITY_RANGE;
 
     return {
       id: `particle-${i}`,
@@ -47,9 +49,9 @@ export const createParticles = ({
       y: y + CELL_PADDING + size / 2,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 2, // Slight upward bias
-      rotation: Math.random() * 360,
-      rotationSpeed: (Math.random() - 0.5) * 20,
-      size: size / 4 + Math.random() * (size / 8),
+      rotation: random() * 360,
+      rotationSpeed: (random() - 0.5) * 20,
+      size: size / 4 + random() * (size / 8),
       opacity: 1,
     };
   });

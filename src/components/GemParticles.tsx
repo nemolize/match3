@@ -6,13 +6,8 @@ import {
   createParticles,
   GEM_PARTICLE_COLORS,
   type Particle,
-  updateParticlesInPlace,
+  sampleParticlesAtElapsedInPlace,
 } from "@/utils/particleLogic";
-
-// Cap the per-frame integration step at ~4 frames of 60fps (~67ms). Bigger
-// gaps than that are almost always the tab having been backgrounded or a
-// major jank spike, not real frame time we want to simulate through.
-const MAX_DELTA_MS = (1000 / 60) * 4;
 
 // Per-frame values are written straight to the DOM (see the rAF loop
 // below), bypassing React: routing them through setState forced a reconcile
@@ -44,9 +39,8 @@ export const GemParticles = ({
   onComplete,
   random,
 }: GemParticlesProps) => {
-  // Rendered once; every later frame mutates these elements imperatively.
-  // React re-renders (from the parent) diff against the same initial style
-  // values, so they never clobber the imperative writes.
+  // Render descriptors stay immutable; every frame samples the absolute-time
+  // trajectory into a separate buffer before writing it to the DOM.
   const [{ initialParticles, simulationParticles }] = useState(() => {
     const particles = createParticles({ x, y, size, random });
     return {
@@ -66,7 +60,6 @@ export const GemParticles = ({
 
   useEffect(() => {
     const startTime = performance.now();
-    let lastTime = startTime;
     let animationFrame: number;
 
     const animate = (now: number) => {
@@ -77,20 +70,10 @@ export const GemParticles = ({
         return;
       }
 
-      // Clamp deltaMs so a big gap between frames — the tab going into the
-      // background then resuming, or a jank spike — does not translate into
-      // a single frame of position/velocity that flings particles across
-      // the screen. Also swallows the first-frame edge case where the ref
-      // integrator would otherwise see whatever wall-clock elapsed since
-      // startTime as `deltaMs`.
-      const rawDeltaMs = now - lastTime;
-      const deltaMs = Math.min(rawDeltaMs, MAX_DELTA_MS);
-      lastTime = now;
-
-      updateParticlesInPlace({
+      sampleParticlesAtElapsedInPlace({
+        initialParticles,
         particles: particlesRef.current,
         elapsed,
-        deltaMs,
       });
       particlesRef.current.forEach((particle, i) => {
         const element = elementsRef.current[i];
@@ -105,7 +88,7 @@ export const GemParticles = ({
     return () => {
       cancelAnimationFrame(animationFrame);
     };
-  }, [id]);
+  }, [id, initialParticles]);
 
   const color = GEM_PARTICLE_COLORS[gemType];
 

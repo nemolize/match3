@@ -22,6 +22,7 @@ describe("GemParticles", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   test("swapping the onComplete callback identity does not reset the lifetime timer", () => {
@@ -101,5 +102,40 @@ describe("GemParticles", () => {
     });
     const t2 = readTransforms(container);
     expect(t2).not.toEqual(t1);
+  });
+
+  test("samples a long frame gap from absolute elapsed time", () => {
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    const { container } = render(
+      <GemParticles
+        id="p1"
+        gemType="red"
+        x={100}
+        y={100}
+        size={40}
+        onComplete={vi.fn()}
+        random={() => 0}
+      />,
+    );
+
+    act(() => {
+      animationFrames.shift()?.(500);
+    });
+
+    const transform = readTransforms(container)[0];
+    const values = transform?.match(
+      /translate\(([-\d.]+)px, ([-\d.]+)px\) rotate\(([-\d.]+)deg\)/,
+    );
+    if (!values) throw new Error("Expected a particle transform");
+    expect(Number(values[1])).toBeCloseTo(179);
+    expect(Number(values[2])).toBeCloseTo(284);
+    expect(Number(values[3])).toBeCloseTo(-300);
   });
 });

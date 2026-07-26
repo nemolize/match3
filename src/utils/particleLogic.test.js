@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import {
   createParticles,
-  updateParticles,
-  updateParticlesInPlace,
+  sampleParticlesAtElapsed,
+  sampleParticlesAtElapsedInPlace,
 } from "./particleLogic";
 
 const CELL_PADDING = 4;
@@ -151,8 +151,42 @@ describe("particleLogic", () => {
     });
   });
 
-  describe("updateParticles", () => {
+  describe("sampleParticlesAtElapsed", () => {
     test("should update the renderer-owned particles without allocating replacements", () => {
+      const initialParticles = [
+        {
+          id: "1",
+          x: 100,
+          y: 100,
+          vx: 5,
+          vy: 3,
+          rotation: 0,
+          rotationSpeed: 10,
+          size: 10,
+          opacity: 1,
+        },
+      ];
+      const particles = initialParticles.map((particle) => ({ ...particle }));
+      const particle = particles[0];
+
+      sampleParticlesAtElapsedInPlace({
+        initialParticles,
+        particles,
+        elapsed: 500,
+        lifetime: 1000,
+      });
+
+      expect(particles[0]).toBe(particle);
+      expect(particle.x).toBeCloseTo(250);
+      expect(particle.y).toBeCloseTo(415);
+      expect(particle.vx).toBe(5);
+      expect(particle.vy).toBeCloseTo(18);
+      expect(particle.rotation).toBeCloseTo(300);
+      expect(particle.opacity).toBe(0.5);
+      expect(initialParticles[0].x).toBe(100);
+    });
+
+    test("should reject aliased initial and output particles", () => {
       const particles = [
         {
           id: "1",
@@ -166,21 +200,14 @@ describe("particleLogic", () => {
           opacity: 1,
         },
       ];
-      const particle = particles[0];
 
-      updateParticlesInPlace({
-        particles,
-        elapsed: 500,
-        lifetime: 1000,
-      });
-
-      expect(particles[0]).toBe(particle);
-      expect(particle.x).toBe(105);
-      expect(particle.y).toBe(103);
-      expect(particle.vx).toBe(5 * 0.98);
-      expect(particle.vy).toBe(3.5);
-      expect(particle.rotation).toBe(10);
-      expect(particle.opacity).toBe(0.5);
+      expect(() =>
+        sampleParticlesAtElapsedInPlace({
+          initialParticles: particles,
+          particles,
+          elapsed: 500,
+        }),
+      ).toThrow("Initial particles must not share output objects");
     });
 
     test("should update particle positions based on velocity", () => {
@@ -198,13 +225,13 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
+        elapsed: 1000 / 60,
       });
 
       expect(updated[0].x).toBe(105); // 100 + 5
-      expect(updated[0].y).toBe(103); // 100 + 3
+      expect(updated[0].y).toBe(103.25); // 100 + 3 + 0.5 * 0.5
     });
 
     test("should apply gravity to vertical velocity", () => {
@@ -223,16 +250,16 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
+        elapsed: 1000 / 60,
       });
 
       expect(updated[0].vy).toBe(gravity);
+      expect(updated[0].y).toBe(100.25);
     });
 
-    test("should apply air resistance to horizontal velocity", () => {
-      const airResistance = 0.98;
+    test("should keep horizontal velocity constant", () => {
       const initialParticles = [
         {
           id: "1",
@@ -247,12 +274,13 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
+        elapsed: 500,
       });
 
-      expect(updated[0].vx).toBe(10 * airResistance);
+      expect(updated[0].x).toBeCloseTo(400);
+      expect(updated[0].vx).toBe(10);
     });
 
     test("should update rotation based on rotation speed", () => {
@@ -270,9 +298,9 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
+        elapsed: 1000 / 60,
       });
 
       expect(updated[0].rotation).toBe(55); // 45 + 10
@@ -296,24 +324,24 @@ describe("particleLogic", () => {
       const lifetime = 1000;
 
       // At 0ms: opacity = 1
-      const updated0 = updateParticles({
-        particles: initialParticles,
+      const updated0 = sampleParticlesAtElapsed({
+        initialParticles,
         elapsed: 0,
         lifetime,
       });
       expect(updated0[0].opacity).toBe(1);
 
       // At 500ms: opacity = 0.5
-      const updated500 = updateParticles({
-        particles: initialParticles,
+      const updated500 = sampleParticlesAtElapsed({
+        initialParticles,
         elapsed: 500,
         lifetime,
       });
       expect(updated500[0].opacity).toBe(0.5);
 
       // At 1000ms: opacity = 0
-      const updated1000 = updateParticles({
-        particles: initialParticles,
+      const updated1000 = sampleParticlesAtElapsed({
+        initialParticles,
         elapsed: 1000,
         lifetime,
       });
@@ -335,8 +363,8 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
         elapsed: 2000,
         lifetime: 1000,
       });
@@ -345,10 +373,7 @@ describe("particleLogic", () => {
       expect(updated[0].opacity).toBeGreaterThanOrEqual(0);
     });
 
-    test("should not be capped by the component's MAX_DELTA_MS (the cap is applied at the caller)", () => {
-      // Sanity: updateParticles itself is a pure integrator — it happily
-      // takes any deltaMs. The clamp lives in GemParticles so tests that
-      // exercise clamping happen at the component layer, not here.
+    test("should sample a long frame gap from absolute elapsed time", () => {
       const initialParticles = [
         {
           id: "1",
@@ -363,17 +388,17 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
-        deltaMs: 1000, // A pathological one-second frame
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
+        elapsed: 500,
       });
 
-      // Full one-second step: 60 frames of horizontal velocity
-      expect(updated[0].x).toBeCloseTo(100 + 10 * 60);
+      expect(updated[0].x).toBeCloseTo(400);
+      expect(updated[0].y).toBeCloseTo(325);
+      expect(updated[0].opacity).toBe(0.5);
     });
 
-    test("should scale integration with deltaMs (frame-rate independent)", () => {
+    test("should produce the same result for every frame schedule", () => {
       const initialParticles = [
         {
           id: "1",
@@ -388,16 +413,28 @@ describe("particleLogic", () => {
         },
       ];
 
-      // Half a 60fps frame (as on a 120Hz display) moves half as far
-      const updated = updateParticles({
-        particles: initialParticles,
-        elapsed: 0,
-        deltaMs: 1000 / 120,
-      });
+      const sampleSchedule = (schedule) => {
+        const particles = initialParticles.map((particle) => ({ ...particle }));
+        schedule.forEach((elapsed) => {
+          sampleParticlesAtElapsedInPlace({
+            initialParticles,
+            particles,
+            elapsed,
+          });
+        });
+        return particles[0];
+      };
+      const schedules = [
+        Array.from({ length: 60 }, (_, i) => ((i + 1) * 500) / 60),
+        Array.from({ length: 30 }, (_, i) => ((i + 1) * 500) / 30),
+        Array.from({ length: 120 }, (_, i) => ((i + 1) * 500) / 120),
+        [16, 49, 83, 150, 311, 500],
+      ];
+      const expected = sampleSchedule(schedules[0]);
 
-      expect(updated[0].x).toBeCloseTo(105); // 100 + 10 * 0.5
-      expect(updated[0].rotation).toBeCloseTo(3); // 6 * 0.5
-      expect(updated[0].vy).toBeCloseTo(0.25); // gravity 0.5 * 0.5
+      schedules.slice(1).forEach((schedule) => {
+        expect(sampleSchedule(schedule)).toEqual(expected);
+      });
     });
 
     test("should update multiple particles independently", () => {
@@ -426,21 +463,21 @@ describe("particleLogic", () => {
         },
       ];
 
-      const updated = updateParticles({
-        particles: initialParticles,
+      const updated = sampleParticlesAtElapsed({
+        initialParticles,
         elapsed: 500,
         lifetime: 1000,
       });
 
       // First particle
-      expect(updated[0].x).toBe(105);
-      expect(updated[0].y).toBe(103);
-      expect(updated[0].rotation).toBe(10);
+      expect(updated[0].x).toBeCloseTo(250);
+      expect(updated[0].y).toBeCloseTo(415);
+      expect(updated[0].rotation).toBeCloseTo(300);
 
       // Second particle
-      expect(updated[1].x).toBe(197); // 200 + (-3)
-      expect(updated[1].y).toBe(207);
-      expect(updated[1].rotation).toBe(85); // 90 + (-5)
+      expect(updated[1].x).toBeCloseTo(110);
+      expect(updated[1].y).toBeCloseTo(635);
+      expect(updated[1].rotation).toBeCloseTo(-60);
 
       // Both should have same opacity (based on elapsed time)
       expect(updated[0].opacity).toBe(0.5);

@@ -14,7 +14,6 @@ export interface Particle {
 }
 
 const GRAVITY = 0.5;
-const AIR_RESISTANCE = 0.98;
 const INITIAL_VELOCITY_RANGE = 5;
 const CELL_PADDING = 4; // p-1 = 4px padding from the cell
 const BASE_FRAME_MS = 1000 / 60;
@@ -57,53 +56,70 @@ export const createParticles = ({
   });
 };
 
-export interface UpdateParticlesOptions {
-  particles: Particle[];
-  elapsed: number; // Time elapsed since start in milliseconds
-  lifetime?: number; // Particle lifetime in milliseconds
-  deltaMs?: number; // Time since the previous update in milliseconds
+export interface SampleParticlesOptions {
+  initialParticles: readonly Readonly<Particle>[];
+  elapsed: number;
+  lifetime?: number;
 }
 
-export const updateParticlesInPlace = ({
+interface SampleParticlesInPlaceOptions extends SampleParticlesOptions {
+  particles: Particle[];
+}
+
+export const sampleParticlesAtElapsedInPlace = ({
+  initialParticles,
   particles,
   elapsed,
   lifetime = TIMING_CONFIG.particleLifetime,
-  deltaMs = BASE_FRAME_MS,
-}: UpdateParticlesOptions): void => {
-  const dt = deltaMs / BASE_FRAME_MS;
-  const velocityDecay = Math.pow(AIR_RESISTANCE, dt);
-  const opacity = Math.max(0, 1 - elapsed / lifetime);
+}: SampleParticlesInPlaceOptions): void => {
+  if (particles.length !== initialParticles.length) {
+    throw new Error("Particle buffers must have matching lengths");
+  }
 
-  for (const particle of particles) {
-    particle.x += particle.vx * dt;
-    particle.y += particle.vy * dt;
-    particle.vx *= velocityDecay;
-    particle.vy += GRAVITY * dt;
-    particle.rotation += particle.rotationSpeed * dt;
+  const normalizedElapsed = Math.max(0, elapsed);
+  const time = normalizedElapsed / BASE_FRAME_MS;
+  const opacity = Math.max(0, 1 - normalizedElapsed / lifetime);
+
+  for (let i = 0; i < particles.length; i += 1) {
+    const initialParticle = initialParticles[i];
+    const particle = particles[i];
+    if (!initialParticle || !particle) continue;
+    if (initialParticle === particle) {
+      throw new Error("Initial particles must not share output objects");
+    }
+
+    particle.x = initialParticle.x + initialParticle.vx * time;
+    particle.y =
+      initialParticle.y +
+      initialParticle.vy * time +
+      (GRAVITY * time * time) / 2;
+    particle.vx = initialParticle.vx;
+    particle.vy = initialParticle.vy + GRAVITY * time;
+    particle.rotation =
+      initialParticle.rotation + initialParticle.rotationSpeed * time;
     particle.opacity = opacity;
   }
 };
 
 /**
- * Updates particle positions, velocities, and opacity based on physics
- * simulation. Physics constants are tuned in 60fps-frame units; `deltaMs`
- * scales the integration step so motion speed is frame-rate independent
- * (e.g. identical on 60Hz and 120Hz displays).
+ * Samples the ballistic trajectory from absolute elapsed time, independent
+ * of how the interval was divided into animation frames.
  */
-export const updateParticles = ({
-  particles,
+export const sampleParticlesAtElapsed = ({
+  initialParticles,
   elapsed,
   lifetime = TIMING_CONFIG.particleLifetime,
-  deltaMs = BASE_FRAME_MS,
-}: UpdateParticlesOptions): Particle[] => {
-  const updatedParticles = particles.map((particle) => ({ ...particle }));
-  updateParticlesInPlace({
-    particles: updatedParticles,
+}: SampleParticlesOptions): Particle[] => {
+  const sampledParticles = initialParticles.map((particle) => ({
+    ...particle,
+  }));
+  sampleParticlesAtElapsedInPlace({
+    initialParticles,
+    particles: sampledParticles,
     elapsed,
     lifetime,
-    deltaMs,
   });
-  return updatedParticles;
+  return sampledParticles;
 };
 
 export const GEM_PARTICLE_COLORS: Record<GemType, string> = {

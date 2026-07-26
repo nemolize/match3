@@ -57,6 +57,7 @@ export const UnderwaterBackground = ({
 
     let animId = 0;
     let elapsed = 0;
+    let causticElapsed = 0;
     let lastTime = performance.now();
     let drawAccumulator = 0;
     let canvasWidth = 0;
@@ -101,7 +102,7 @@ export const UnderwaterBackground = ({
               causticImage.data,
               causticImage.width,
               causticImage.height,
-              elapsed,
+              causticElapsed,
             );
             causticCtx.putImageData(causticImage, 0, 0);
           }
@@ -152,6 +153,9 @@ export const UnderwaterBackground = ({
       const deltaMs = Math.min(now - lastTime, 50);
       lastTime = now;
       elapsed += deltaMs;
+      if (!foregroundBusyRef.current) {
+        causticElapsed += deltaMs;
+      }
       drawAccumulator += deltaMs;
 
       if (drawAccumulator >= BACKGROUND_FRAME_MS) {

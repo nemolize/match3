@@ -132,8 +132,8 @@ describe("UnderwaterBackground", () => {
     expect(context?.fillRect).toHaveBeenCalledTimes(3);
   });
 
-  test("keeps the cached caustics while foreground animation is busy", () => {
-    render(
+  test("resumes cached caustics from their paused phase", () => {
+    const { rerender } = render(
       <div>
         <UnderwaterBackground isForegroundBusy />
       </div>,
@@ -144,5 +144,21 @@ describe("UnderwaterBackground", () => {
     });
 
     expect(renderCaustics).not.toHaveBeenCalled();
+
+    rerender(
+      <div>
+        <UnderwaterBackground />
+      </div>,
+    );
+    act(() => {
+      animationFrames.shift()?.(68);
+    });
+
+    expect(renderCaustics).toHaveBeenLastCalledWith(
+      expect.any(Uint8ClampedArray),
+      expect.any(Number),
+      expect.any(Number),
+      34,
+    );
   });
 });

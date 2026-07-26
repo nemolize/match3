@@ -107,7 +107,7 @@ export const GameBoard = ({
       {/* Board-scoped animated backdrop. NOT `overflow-hidden` on this
           panel — BreakingGemsLayer particles fly past its edge by design;
           the canvas clips itself with its own rounded corners. */}
-      <UnderwaterBackground isForegroundBusy={isAnimating} />
+      <UnderwaterBackground />
       <div
         ref={boardRef}
         aria-colcount={BOARD_SIZE}

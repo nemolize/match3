@@ -98,7 +98,7 @@ describe("UnderwaterBackground", () => {
     vi.restoreAllMocks();
   });
 
-  test("repaints immediately after resize and limits the loop to 30 fps", () => {
+  test("keeps caustics moving at the throttled background frame rate", () => {
     const { container } = render(
       <div>
         <UnderwaterBackground />
@@ -130,35 +130,12 @@ describe("UnderwaterBackground", () => {
       animationFrames.shift()?.(68);
     });
     expect(context?.fillRect).toHaveBeenCalledTimes(3);
-  });
-
-  test("resumes cached caustics from their paused phase", () => {
-    const { rerender } = render(
-      <div>
-        <UnderwaterBackground isForegroundBusy />
-      </div>,
-    );
-
-    act(() => {
-      animationFrames.shift()?.(34);
-    });
-
-    expect(renderCaustics).not.toHaveBeenCalled();
-
-    rerender(
-      <div>
-        <UnderwaterBackground />
-      </div>,
-    );
-    act(() => {
-      animationFrames.shift()?.(68);
-    });
-
+    expect(renderCaustics).toHaveBeenCalledTimes(2);
     expect(renderCaustics).toHaveBeenLastCalledWith(
       expect.any(Uint8ClampedArray),
       expect.any(Number),
       expect.any(Number),
-      34,
+      68,
     );
   });
 });

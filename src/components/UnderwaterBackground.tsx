@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   type Bubble,
@@ -13,10 +13,6 @@ const BUBBLE_COUNT = 26;
 const BACKGROUND_FRAME_MS = 1000 / 30;
 const MAX_BACKGROUND_DPR = 2;
 
-interface UnderwaterBackgroundProps {
-  isForegroundBusy?: boolean;
-}
-
 /**
  * Animated sunlit-water canvas scoped to its offset parent: it fills the
  * nearest positioned ancestor (`absolute inset-0`) and sizes its bitmap
@@ -25,18 +21,11 @@ interface UnderwaterBackgroundProps {
  * (`relative`) and should set `isolate` so the `-z-10` canvas paints
  * above the parent's own background instead of escaping behind it.
  */
-export const UnderwaterBackground = ({
-  isForegroundBusy = false,
-}: UnderwaterBackgroundProps) => {
+export const UnderwaterBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const foregroundBusyRef = useRef(isForegroundBusy);
   const [rendererStatus, setRendererStatus] = useState<
     "initializing" | "ready" | "unavailable"
   >("initializing");
-
-  useLayoutEffect(() => {
-    foregroundBusyRef.current = isForegroundBusy;
-  }, [isForegroundBusy]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -57,7 +46,6 @@ export const UnderwaterBackground = ({
 
     let animId = 0;
     let elapsed = 0;
-    let causticElapsed = 0;
     let lastTime = performance.now();
     let drawAccumulator = 0;
     let canvasWidth = 0;
@@ -76,7 +64,7 @@ export const UnderwaterBackground = ({
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const drawFrame = (deltaMs: number, refreshCaustics = true) => {
+    const drawFrame = (deltaMs: number) => {
       const width = canvasWidth;
       const height = canvasHeight;
       if (width === 0 || height === 0) return;
@@ -93,19 +81,17 @@ export const UnderwaterBackground = ({
 
       drawGodRays(ctx, width, height, elapsed);
       if (causticCtx && causticImage) {
-        if (refreshCaustics) {
-          causticParity = !causticParity;
-          // deltaMs === 0 is the reduced-motion / just-resized static
-          // frame — always render that one.
-          if (causticParity || deltaMs === 0) {
-            renderCaustics(
-              causticImage.data,
-              causticImage.width,
-              causticImage.height,
-              causticElapsed,
-            );
-            causticCtx.putImageData(causticImage, 0, 0);
-          }
+        causticParity = !causticParity;
+        // deltaMs === 0 is the reduced-motion / just-resized static
+        // frame — always render that one.
+        if (causticParity || deltaMs === 0) {
+          renderCaustics(
+            causticImage.data,
+            causticImage.width,
+            causticImage.height,
+            elapsed,
+          );
+          causticCtx.putImageData(causticImage, 0, 0);
         }
         ctx.drawImage(causticCanvas, 0, 0, width, height);
       }
@@ -141,7 +127,7 @@ export const UnderwaterBackground = ({
       }
 
       // Assigning bitmap dimensions clears the opaque canvas to black.
-      drawFrame(0, !foregroundBusyRef.current);
+      drawFrame(0);
     };
 
     const observer = new ResizeObserver(resize);
@@ -153,15 +139,12 @@ export const UnderwaterBackground = ({
       const deltaMs = Math.min(now - lastTime, 50);
       lastTime = now;
       elapsed += deltaMs;
-      if (!foregroundBusyRef.current) {
-        causticElapsed += deltaMs;
-      }
       drawAccumulator += deltaMs;
 
       if (drawAccumulator >= BACKGROUND_FRAME_MS) {
         const drawDeltaMs = drawAccumulator;
         drawAccumulator = 0;
-        drawFrame(drawDeltaMs, !foregroundBusyRef.current);
+        drawFrame(drawDeltaMs);
       }
       animId = requestAnimationFrame(loop);
     };

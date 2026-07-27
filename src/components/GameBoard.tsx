@@ -3,7 +3,10 @@ import { motion } from "motion/react";
 import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
-import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
+import {
+  BreakingGemsLayer,
+  type ParticleWorkloadSnapshot,
+} from "@/components/BreakingGemsLayer";
 import { UnderwaterBackground } from "@/components/UnderwaterBackground";
 import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
 import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
@@ -17,6 +20,8 @@ interface GameBoardProps {
   onSwipe: (from: Position, to: Position) => void;
   onGemTap: (position: Position) => void;
   isAnimating: boolean;
+  onParticleWorkloadChange?: (snapshot: ParticleWorkloadSnapshot) => void;
+  particleRandom?: () => number;
 }
 
 export const GameBoard = ({
@@ -27,6 +32,8 @@ export const GameBoard = ({
   onSwipe,
   onGemTap,
   isAnimating,
+  onParticleWorkloadChange,
+  particleRandom,
 }: GameBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +118,7 @@ export const GameBoard = ({
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
         className="mx-auto grid aspect-square w-full max-w-sm overflow-hidden"
+        data-gem-renderer="dom"
         role="grid"
         style={{
           gap: `${BOARD_GAP_REM}rem`,
@@ -141,6 +149,8 @@ export const GameBoard = ({
         board={board}
         matches={matches}
         resolveOrigin={resolveParticleOrigin}
+        onWorkloadChange={onParticleWorkloadChange}
+        particleRandom={particleRandom}
       />
     </motion.div>
   );

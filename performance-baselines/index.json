@@ -1,0 +1,56 @@
+{
+  "comparisons": [],
+  "reports": [
+    {
+      "environmentFingerprint": "129e84b57e33a480",
+      "generatedAt": "2026-07-27T04:28:00.430Z",
+      "id": "20260727T042708373Z--cpu-stress--cb87e87c6171",
+      "path": "reports/20260727T042708373Z--cpu-stress--cb87e87c6171.json",
+      "profile": "cpu-stress",
+      "renderers": {
+        "background": "canvas2d",
+        "gems": "dom",
+        "particles": "dom"
+      },
+      "revision": "cb87e87c617185a977a98f0dc7cc3a11566a9a3d",
+      "role": "baseline",
+      "variant": "canvas2d-background_dom-gems_dom-particles"
+    },
+    {
+      "environmentFingerprint": "3cbba93caaf56e76",
+      "generatedAt": "2026-07-27T04:29:30.902Z",
+      "id": "20260727T042808092Z--hardware-gpu--cb87e87c6171",
+      "path": "reports/20260727T042808092Z--hardware-gpu--cb87e87c6171.json",
+      "profile": "hardware-gpu",
+      "renderers": {
+        "background": "canvas2d",
+        "gems": "dom",
+        "particles": "dom"
+      },
+      "revision": "cb87e87c617185a977a98f0dc7cc3a11566a9a3d",
+      "role": "baseline",
+      "variant": "canvas2d-background_dom-gems_dom-particles"
+    }
+  ],
+  "schemaVersion": 1,
+  "selectedBaselines": {
+    "cpu-stress::129e84b57e33a480": "20260727T042708373Z--cpu-stress--cb87e87c6171",
+    "hardware-gpu::3cbba93caaf56e76": "20260727T042808092Z--hardware-gpu--cb87e87c6171"
+  },
+  "selectionHistory": [
+    {
+      "environmentFingerprint": "129e84b57e33a480",
+      "profile": "cpu-stress",
+      "reportId": "20260727T042708373Z--cpu-stress--cb87e87c6171",
+      "selectedAt": "2026-07-27T04:29:36.236Z",
+      "selectionKey": "cpu-stress::129e84b57e33a480"
+    },
+    {
+      "environmentFingerprint": "3cbba93caaf56e76",
+      "profile": "hardware-gpu",
+      "reportId": "20260727T042808092Z--hardware-gpu--cb87e87c6171",
+      "selectedAt": "2026-07-27T04:29:39.994Z",
+      "selectionKey": "hardware-gpu::3cbba93caaf56e76"
+    }
+  ]
+}

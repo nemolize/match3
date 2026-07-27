@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { GemParticles } from "@/components/GemParticles";
+import { TIMING_CONFIG } from "@/config/timing";
 import type { Gem, GemType, Match } from "@/types/game";
 import type { ParticleOrigin } from "@/utils/boardLayout";
 
 interface BreakingGem extends ParticleOrigin {
   id: string;
   type: GemType;
+}
+
+export interface ParticleWorkloadSnapshot {
+  burstCount: number;
+  particleCount: number;
 }
 
 export interface BreakingGemsLayerProps {
@@ -18,6 +24,8 @@ export interface BreakingGemsLayerProps {
    * stays decoupled from the rendered grid's DOM shape.
    */
   resolveOrigin: (row: number, col: number) => ParticleOrigin | null;
+  onWorkloadChange?: (snapshot: ParticleWorkloadSnapshot) => void;
+  particleRandom?: () => number;
 }
 
 /**
@@ -29,6 +37,8 @@ export const BreakingGemsLayer = ({
   board,
   matches,
   resolveOrigin,
+  onWorkloadChange,
+  particleRandom,
 }: BreakingGemsLayerProps) => {
   const [breakingGems, setBreakingGems] = useState<BreakingGem[]>([]);
   const prevMatchesRef = useRef<Match[]>([]);
@@ -81,8 +91,15 @@ export const BreakingGemsLayer = ({
     setBreakingGems((prev) => prev.filter((gem) => gem.id !== id));
   }, []);
 
+  useEffect(() => {
+    onWorkloadChange?.({
+      burstCount: breakingGems.length,
+      particleCount: breakingGems.length * TIMING_CONFIG.particleCount,
+    });
+  }, [breakingGems.length, onWorkloadChange]);
+
   return (
-    <>
+    <div className="contents" data-particle-renderer="dom">
       {breakingGems.map((breakingGem) => (
         <GemParticles
           key={breakingGem.id}
@@ -92,8 +109,9 @@ export const BreakingGemsLayer = ({
           y={breakingGem.y}
           size={breakingGem.size}
           onComplete={handleParticleComplete}
+          random={particleRandom}
         />
       ))}
-    </>
+    </div>
   );
 };

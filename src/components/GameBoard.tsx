@@ -1,16 +1,13 @@
 import { useGesture } from "@use-gesture/react";
 import { motion } from "motion/react";
-import { useCallback, useRef } from "react";
+import { useRef, useState } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
-import {
-  BreakingGemsLayer,
-  type ParticleWorkloadSnapshot,
-} from "@/components/BreakingGemsLayer";
-import { UnderwaterBackground } from "@/components/UnderwaterBackground";
+import { WebGpuBoardCanvas } from "@/components/WebGpuBoardCanvas";
 import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
+import type { BoardRendererStatus } from "@/rendering/webgpu/types";
 import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
-import { computeParticleOrigin } from "@/utils/boardLayout";
+import type { ParticleWorkloadSnapshot } from "@/types/performance";
 
 interface GameBoardProps {
   board: (Gem | null)[][];
@@ -36,15 +33,10 @@ export const GameBoard = ({
   particleRandom,
 }: GameBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
-
-  // GameBoard owns the ref, so it also owns the DOM measurement. The
-  // particle layer receives ready-to-use spawn origins and never has to
-  // know how the grid is laid out.
-  const resolveParticleOrigin = useCallback((row: number, col: number) => {
-    const el = boardRef.current;
-    if (!el) return null;
-    return computeParticleOrigin(el, row, col);
-  }, []);
+  const [rendererReady, setRendererReady] = useState(false);
+  const handleRendererStatusChange = (status: BoardRendererStatus) => {
+    setRendererReady(status.state === "ready");
+  };
 
   const bind = useGesture(
     {
@@ -109,16 +101,24 @@ export const GameBoard = ({
       animate={{ opacity: 1, scale: 1, rotateX: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
-      {/* Board-scoped animated backdrop. NOT `overflow-hidden` on this
-          panel — BreakingGemsLayer particles fly past its edge by design;
-          the canvas clips itself with its own rounded corners. */}
-      <UnderwaterBackground />
+      <WebGpuBoardCanvas
+        animationPhase={animationPhase}
+        board={board}
+        boardRef={boardRef}
+        matches={matches}
+        onParticleWorkloadChange={onParticleWorkloadChange}
+        onStatusChange={handleRendererStatusChange}
+        particleRandom={particleRandom}
+        selectedGem={selectedGem}
+      />
       <div
         ref={boardRef}
         aria-colcount={BOARD_SIZE}
         aria-rowcount={BOARD_SIZE}
+        aria-busy={!rendererReady}
         className="mx-auto grid aspect-square w-full max-w-sm overflow-hidden"
-        data-gem-renderer="dom"
+        data-gem-renderer="webgpu"
+        inert={rendererReady ? undefined : true}
         role="grid"
         style={{
           gap: `${BOARD_GAP_REM}rem`,
@@ -136,22 +136,12 @@ export const GameBoard = ({
                 selectedGem?.row === rowIndex && selectedGem?.col === colIndex
               }
               isAnimating={isAnimating}
-              animationPhase={animationPhase}
               bind={bind}
               onActivate={onGemTap}
             />
           )),
         )}
       </div>
-
-      {/* Particle effects for breaking gems */}
-      <BreakingGemsLayer
-        board={board}
-        matches={matches}
-        resolveOrigin={resolveParticleOrigin}
-        onWorkloadChange={onParticleWorkloadChange}
-        particleRandom={particleRandom}
-      />
     </motion.div>
   );
 };

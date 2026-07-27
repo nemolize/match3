@@ -199,10 +199,10 @@ export const useMatch3Game = () => {
 
         // Invalid swap: revert with the same animation so the player gets
         // visible feedback instead of silence.
-        const revertedBoard = swapGems(swappedBoard, from, to);
+        await swapAndWait(swappedBoard, from, to);
+        if (isStale()) return;
         setGameState((prev) => ({
           ...prev,
-          board: revertedBoard,
           isAnimating: false,
           animationPhase: "idle",
         }));

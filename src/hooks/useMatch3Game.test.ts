@@ -53,9 +53,10 @@ describe("useMatch3Game", () => {
     vi.mocked(gameLogic.hasValidMoves).mockReset();
   });
 
-  test("invalid swipe animates the attempt and reverts after swapDuration", async () => {
+  test("invalid swipe keeps input locked through the reverse animation", async () => {
     const { result } = renderHook(() => useMatch3Game());
     const initialLayout = gemTypeGrid(result.current.gameState.board);
+    const isValidSwapMock = vi.mocked(gameLogic.isValidSwap);
 
     await act(async () => {
       void result.current.handleSwipe(someSwipe.from, someSwipe.to);
@@ -72,7 +73,23 @@ describe("useMatch3Game", () => {
     expect(midLayout[0]?.[0]).toBe(initialLayout[0]?.[1]);
     expect(midLayout[0]?.[1]).toBe(initialLayout[0]?.[0]);
 
-    // Advance past the swap animation; the revert should now be committed
+    // Advance past the attempt; the reverse board is committed but remains
+    // animated and input-locked until the second transition settles.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TIMING_CONFIG.swapDuration + 1);
+    });
+
+    expect(result.current.gameState.isAnimating).toBe(true);
+    expect(result.current.gameState.animationPhase).toBe("swap");
+    expect(gemTypeGrid(result.current.gameState.board)).toEqual(initialLayout);
+
+    isValidSwapMock.mockClear();
+    await act(async () => {
+      void result.current.handleSwipe({ row: 2, col: 2 }, { row: 2, col: 3 });
+      await Promise.resolve();
+    });
+    expect(isValidSwapMock).not.toHaveBeenCalled();
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(TIMING_CONFIG.swapDuration + 1);
     });

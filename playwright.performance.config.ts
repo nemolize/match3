@@ -18,6 +18,15 @@ export default defineConfig({
     baseURL: "http://localhost:5173",
     channel: browserChannel || undefined,
     headless,
+    launchOptions: browserChannel
+      ? undefined
+      : {
+          args: [
+            "--enable-unsafe-webgpu",
+            "--use-webgpu-adapter=swiftshader",
+            "--use-gpu-in-tests",
+          ],
+        },
     trace: "off",
     viewport: { width: 1280, height: 900 },
   },

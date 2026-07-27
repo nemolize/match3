@@ -1,4 +1,5 @@
 import { TIMING_CONFIG } from "@/config/timing";
+import { GEM_CELL_PADDING_PX } from "@/constants/game";
 import type { GemType } from "@/types/game";
 
 export interface Particle {
@@ -15,7 +16,6 @@ export interface Particle {
 
 const GRAVITY = 0.5;
 const INITIAL_VELOCITY_RANGE = 5;
-const CELL_PADDING = 4; // p-1 = 4px padding from the cell
 const BASE_FRAME_MS = 1000 / 60;
 
 export interface CreateParticlesOptions {
@@ -44,8 +44,8 @@ export const createParticles = ({
     return {
       id: `particle-${i}`,
       // Position at gem center: cell position + padding + half gem size
-      x: x + CELL_PADDING + size / 2,
-      y: y + CELL_PADDING + size / 2,
+      x: x + GEM_CELL_PADDING_PX + size / 2,
+      y: y + GEM_CELL_PADDING_PX + size / 2,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 2, // Slight upward bias
       rotation: random() * 360,

@@ -3,6 +3,15 @@ import { devices, expect, test } from "@playwright/test";
 const { defaultBrowserType: _defaultBrowserType, ...iPhoneSE } =
   devices["iPhone SE"];
 
+const expectWebGpuReady = async (page) => {
+  const canvas = page.locator(
+    'canvas[data-renderer="webgpu"][data-renderer-status="ready"]',
+  );
+  await expect(canvas).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  return canvas;
+};
+
 const expectMobileLayoutToFit = async (page) => {
   const hasVerticalOverflow = await page.evaluate(
     () => document.documentElement.scrollHeight > window.innerHeight,
@@ -49,6 +58,11 @@ test("should load the match3 game page", async ({ page }) => {
   const gameBoard = page.getByRole("grid");
   await expect(gameBoard).toBeVisible();
   await expect(gameBoard).toHaveCSS("overflow", "hidden");
+  await expectWebGpuReady(page);
+  await expect(gameBoard).toHaveAttribute("data-gem-renderer", "webgpu");
+  await expect(page.locator('[data-particle-renderer="webgpu"]')).toHaveCount(
+    1,
+  );
 
   // Check that instructions are present
   await expect(
@@ -70,94 +84,134 @@ test("should load the match3 game page", async ({ page }) => {
   await expect(page.locator("text=/^0$/").first()).toBeVisible();
 });
 
-test("clips refill gems while they fall in from above the board", async ({
+test("renders deterministic refill state through WebGPU", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/e2e-tests/fixtures/drop.html");
+  await page.waitForLoadState("networkidle");
+  await expectWebGpuReady(page);
+  await page.evaluate(async () => {
+    await window.__match3RendererPerformance?.resetGpuTimings();
+  });
+  await page.getByRole("button", { name: "Start drop" }).click();
+  await expect(
+    page.getByRole("button", { name: "Paraiba tourmaline gem" }),
+  ).toHaveCount(5);
+  const timings = await page.evaluate(async () =>
+    window.__match3RendererPerformance?.readGpuTimings(),
+  );
+  expect(timings?.supported).toBe(true);
+  expect(timings?.passes?.gemRefraction?.sampleCount).toBe(1);
+});
+
+test("keeps semantic gems available while WebGPU animates a drop", async ({
   page,
 }) => {
   await page.goto("/e2e-tests/fixtures/drop.html");
   await page.waitForLoadState("networkidle");
+  await expectWebGpuReady(page);
   await page.getByRole("button", { name: "Start drop" }).click();
-
-  await page.waitForFunction(
-    () => {
-      const grid = document.querySelector('[role="grid"]');
-      if (!(grid instanceof HTMLElement)) return false;
-      const gridBox = grid.getBoundingClientRect();
-      return Array.from(
-        grid.querySelectorAll('button[aria-label$=" gem"]'),
-      ).some((gem) => {
-        const box = gem.getBoundingClientRect();
-        return box.top < gridBox.top - 0.5 && box.bottom > gridBox.top + 0.5;
-      });
-    },
-    undefined,
-    { timeout: 2500 },
+  await expect(
+    page.getByRole("button", { name: "Paraiba tourmaline gem" }),
+  ).toHaveCount(5);
+  await expect(page.getByRole("grid")).toHaveAttribute(
+    "data-gem-renderer",
+    "webgpu",
   );
-
-  const clipState = await page.getByRole("grid").evaluate((grid) => {
-    const gridBox = grid.getBoundingClientRect();
-    const enteringGem = Array.from(
-      grid.querySelectorAll('button[aria-label$=" gem"]'),
-    ).find((gem) => {
-      const box = gem.getBoundingClientRect();
-      return box.top < gridBox.top - 0.5 && box.bottom > gridBox.top + 0.5;
-    });
-    if (!(enteringGem instanceof HTMLElement)) return null;
-
-    const gemBox = enteringGem.getBoundingClientRect();
-    const sampleX = gemBox.left + gemBox.width / 2;
-    const sampleY = (Math.max(gemBox.top, 0) + gridBox.top) / 2;
-    const hit = document.elementFromPoint(sampleX, sampleY);
-    const motionWrapper = enteringGem.parentElement;
-
-    return {
-      hitGemOutsideBoard: hit?.closest('button[aria-label$=" gem"]') !== null,
-      isTransforming:
-        motionWrapper instanceof HTMLElement &&
-        getComputedStyle(motionWrapper).transform !== "none",
-    };
-  });
-
-  expect(clipState).toEqual({
-    hitGemOutsideBoard: false,
-    isTransforming: true,
-  });
 });
 
-test("keeps existing gems visible while they fall", async ({ page }) => {
-  await page.goto("/e2e-tests/fixtures/drop.html");
+test("preserves pointer and keyboard activation in the semantic overlay", async ({
+  page,
+}) => {
+  await page.goto("/");
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "Start drop" }).click();
+  await expectWebGpuReady(page);
 
-  await page.waitForFunction(
-    () =>
-      Array.from(
-        document.querySelectorAll(
-          'button[aria-label="Paraiba tourmaline gem"]',
-        ),
-      ).some((gem) => {
-        const motionWrapper = gem.parentElement;
+  const firstGem = page.getByRole("grid").getByRole("button").first();
+  await firstGem.click();
+  await expect(firstGem).toHaveAttribute("aria-pressed", "true");
+
+  await firstGem.press("Enter");
+  await expect(firstGem).toHaveAttribute("aria-pressed", "false");
+});
+
+test("resizes the WebGPU backing store after a viewport change", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  const canvas = await expectWebGpuReady(page);
+
+  await page.setViewportSize({ width: 420, height: 700 });
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const canvasElement = /** @type {HTMLCanvasElement} */ (element);
+        const rect = canvasElement.getBoundingClientRect();
         return (
-          motionWrapper instanceof HTMLElement &&
-          getComputedStyle(motionWrapper).transform !== "none"
+          canvasElement.width ===
+            Math.round(
+              rect.width * Math.min(window.devicePixelRatio || 1, 2),
+            ) &&
+          canvasElement.height ===
+            Math.round(rect.height * Math.min(window.devicePixelRatio || 1, 2))
         );
       }),
-    undefined,
-    { timeout: 2500 },
+    )
+    .toBe(true);
+
+  const dimensions = await canvas.evaluate((element) => {
+    const canvasElement = /** @type {HTMLCanvasElement} */ (element);
+    const rect = canvasElement.getBoundingClientRect();
+    return {
+      actualHeight: canvasElement.height,
+      actualWidth: canvasElement.width,
+      expectedHeight: Math.round(
+        rect.height * Math.min(window.devicePixelRatio || 1, 2),
+      ),
+      expectedWidth: Math.round(
+        rect.width * Math.min(window.devicePixelRatio || 1, 2),
+      ),
+    };
+  });
+  expect(dimensions.actualWidth).toBe(dimensions.expectedWidth);
+  expect(dimensions.actualHeight).toBe(dimensions.expectedHeight);
+});
+
+test("shows a diagnostic and disables input when WebGPU is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "gpu", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await page.goto("/");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "WebGPU is not supported",
   );
+  await expect(page.getByRole("grid")).toHaveAttribute("inert", "");
+});
 
-  const opacities = await page
-    .getByRole("button", { name: "Paraiba tourmaline gem" })
-    .evaluateAll((gems) =>
-      gems.map((gem) => {
-        const motionWrapper = gem.parentElement;
-        return motionWrapper instanceof HTMLElement
-          ? Number(getComputedStyle(motionWrapper).opacity)
-          : 0;
-      }),
-    );
+test("stops continuous rendering for reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await expectWebGpuReady(page);
+  await page.evaluate(async () => {
+    await window.__match3RendererPerformance?.resetGpuTimings();
+  });
+  await page.waitForTimeout(150);
 
-  expect(opacities).toHaveLength(5);
-  expect(opacities.every((opacity) => opacity === 1)).toBe(true);
+  const timings = await page.evaluate(async () =>
+    window.__match3RendererPerformance?.readGpuTimings(),
+  );
+  expect(timings).toEqual({
+    reason: "renderer-timing-api-unavailable",
+    supported: false,
+  });
 });
 
 test.describe("mobile layout", () => {

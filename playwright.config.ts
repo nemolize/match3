@@ -9,6 +9,13 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: "http://localhost:5173",
+    launchOptions: {
+      args: [
+        "--enable-unsafe-webgpu",
+        "--use-webgpu-adapter=swiftshader",
+        "--use-gpu-in-tests",
+      ],
+    },
     trace: "on-first-retry",
   },
   projects: [

@@ -1,10 +1,9 @@
 import type { useGesture } from "@use-gesture/react";
-import { AnimatePresence, motion } from "motion/react";
 import { memo } from "react";
 
 import { GemComponent } from "@/components/GemComponent";
-import type { AnimationPhase, Gem, Position } from "@/types/game";
-import { getGemInitial, getGravityTransition } from "@/utils/gemAnimation";
+import { GEM_CELL_PADDING_PX } from "@/constants/game";
+import type { Gem, Position } from "@/types/game";
 
 /**
  * The `useGesture` return type: given a cell's (row, col) it produces the
@@ -15,20 +14,12 @@ import { getGemInitial, getGravityTransition } from "@/utils/gemAnimation";
  */
 export type CellBindFn = ReturnType<typeof useGesture>;
 
-const gemSpring = {
-  type: "spring" as const,
-  stiffness: 420,
-  damping: 32,
-  mass: 0.6,
-};
-
 export interface BoardCellProps {
   gem: Gem | null;
   rowIndex: number;
   colIndex: number;
   isSelected: boolean;
   isAnimating: boolean;
-  animationPhase?: AnimationPhase;
   bind: CellBindFn;
   /**
    * Fires for keyboard activation only. Pointer taps are routed through
@@ -51,8 +42,6 @@ const BoardCellImpl = ({
   rowIndex,
   colIndex,
   isSelected,
-  isAnimating,
-  animationPhase = "idle",
   bind,
   onActivate,
 }: BoardCellProps) => {
@@ -60,47 +49,28 @@ const BoardCellImpl = ({
     <div
       aria-colindex={colIndex + 1}
       aria-rowindex={rowIndex + 1}
-      className="aspect-square rounded-lg bg-white/10"
+      className="aspect-square"
       role="gridcell"
     >
-      <AnimatePresence mode="popLayout">
-        {gem && (
-          <div
-            {...bind(rowIndex, colIndex)}
-            className="h-full w-full touch-none"
-            style={{ touchAction: "none" }}
-          >
-            <motion.div
-              key={gem.id}
-              className="h-full w-full p-1"
-              layout
-              layoutId={`gem-${gem.id}`}
-              initial={getGemInitial(gem, animationPhase)}
-              animate={{ y: 0, scale: 1, opacity: 1 }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={{
-                ...gemSpring,
-                ...getGravityTransition(gem, animationPhase),
-              }}
-              whileHover={isAnimating ? undefined : { scale: 1.05 }}
-              whileTap={isAnimating ? undefined : { scale: 0.95 }}
-            >
-              <GemComponent
-                gem={gem}
-                isSelected={isSelected}
-                onActivate={() => onActivate({ row: rowIndex, col: colIndex })}
-              />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {gem && (
+        <div
+          {...bind(rowIndex, colIndex)}
+          className="h-full w-full touch-none"
+          style={{ padding: GEM_CELL_PADDING_PX, touchAction: "none" }}
+        >
+          <GemComponent
+            gem={gem}
+            isSelected={isSelected}
+            onActivate={() => onActivate({ row: rowIndex, col: colIndex })}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
 /**
- * Memoized so a re-render of `GameBoard` (e.g. `BreakingGemsLayer` state
- * change) does NOT re-render 64 cells.
+ * Memoized so renderer status and workload updates do not re-render 64 cells.
  *
  * **Invariants the comparator relies on — read before extending this cell:**
  *
@@ -131,6 +101,5 @@ export const BoardCell = memo(
   (prev, next) =>
     prev.gem === next.gem &&
     prev.isSelected === next.isSelected &&
-    prev.isAnimating === next.isAnimating &&
-    prev.animationPhase === next.animationPhase,
+    prev.isAnimating === next.isAnimating,
 );

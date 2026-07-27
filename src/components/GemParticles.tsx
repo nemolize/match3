@@ -93,7 +93,11 @@ export const GemParticles = ({
   const color = GEM_PARTICLE_COLORS[gemType];
 
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div
+      className="pointer-events-none absolute inset-0"
+      data-particle-burst=""
+      data-particle-count={initialParticles.length}
+    >
       {initialParticles.map((particle, i) => (
         <div
           key={particle.id}
@@ -101,6 +105,7 @@ export const GemParticles = ({
             elementsRef.current[i] = element;
           }}
           className="absolute top-0 left-0 rounded-sm"
+          data-particle=""
           style={{
             width: particle.size,
             height: particle.size,

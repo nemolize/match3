@@ -14,7 +14,6 @@ export interface Particle {
 }
 
 const GRAVITY = 0.5;
-const AIR_RESISTANCE = 0.98;
 const INITIAL_VELOCITY_RANGE = 5;
 const CELL_PADDING = 4; // p-1 = 4px padding from the cell
 const BASE_FRAME_MS = 1000 / 60;
@@ -24,6 +23,7 @@ export interface CreateParticlesOptions {
   y: number; // Cell top-left y position in pixels
   size: number; // Gem size in pixels (cell size minus padding)
   count?: number; // Number of particles to create
+  random?: () => number;
 }
 
 /**
@@ -35,10 +35,11 @@ export const createParticles = ({
   y,
   size,
   count = TIMING_CONFIG.particleCount,
+  random = Math.random,
 }: CreateParticlesOptions): Particle[] => {
   return Array.from({ length: count }, (_, i) => {
     const angle = (i / count) * Math.PI * 2;
-    const speed = 2 + Math.random() * INITIAL_VELOCITY_RANGE;
+    const speed = 2 + random() * INITIAL_VELOCITY_RANGE;
 
     return {
       id: `particle-${i}`,
@@ -47,44 +48,78 @@ export const createParticles = ({
       y: y + CELL_PADDING + size / 2,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 2, // Slight upward bias
-      rotation: Math.random() * 360,
-      rotationSpeed: (Math.random() - 0.5) * 20,
-      size: size / 4 + Math.random() * (size / 8),
+      rotation: random() * 360,
+      rotationSpeed: (random() - 0.5) * 20,
+      size: size / 4 + random() * (size / 8),
       opacity: 1,
     };
   });
 };
 
-export interface UpdateParticlesOptions {
-  particles: Particle[];
-  elapsed: number; // Time elapsed since start in milliseconds
-  lifetime?: number; // Particle lifetime in milliseconds
-  deltaMs?: number; // Time since the previous update in milliseconds
+export interface SampleParticlesOptions {
+  initialParticles: readonly Readonly<Particle>[];
+  elapsed: number;
+  lifetime?: number;
 }
 
-/**
- * Updates particle positions, velocities, and opacity based on physics
- * simulation. Physics constants are tuned in 60fps-frame units; `deltaMs`
- * scales the integration step so motion speed is frame-rate independent
- * (e.g. identical on 60Hz and 120Hz displays).
- */
-export const updateParticles = ({
+interface SampleParticlesInPlaceOptions extends SampleParticlesOptions {
+  particles: Particle[];
+}
+
+export const sampleParticlesAtElapsedInPlace = ({
+  initialParticles,
   particles,
   elapsed,
   lifetime = TIMING_CONFIG.particleLifetime,
-  deltaMs = BASE_FRAME_MS,
-}: UpdateParticlesOptions): Particle[] => {
-  const dt = deltaMs / BASE_FRAME_MS;
+}: SampleParticlesInPlaceOptions): void => {
+  if (particles.length !== initialParticles.length) {
+    throw new Error("Particle buffers must have matching lengths");
+  }
 
-  return particles.map((particle) => ({
+  const normalizedElapsed = Math.max(0, elapsed);
+  const time = normalizedElapsed / BASE_FRAME_MS;
+  const opacity = Math.max(0, 1 - normalizedElapsed / lifetime);
+
+  for (let i = 0; i < particles.length; i += 1) {
+    const initialParticle = initialParticles[i];
+    const particle = particles[i];
+    if (!initialParticle || !particle) continue;
+    if (initialParticle === particle) {
+      throw new Error("Initial particles must not share output objects");
+    }
+
+    particle.x = initialParticle.x + initialParticle.vx * time;
+    particle.y =
+      initialParticle.y +
+      initialParticle.vy * time +
+      (GRAVITY * time * time) / 2;
+    particle.vx = initialParticle.vx;
+    particle.vy = initialParticle.vy + GRAVITY * time;
+    particle.rotation =
+      initialParticle.rotation + initialParticle.rotationSpeed * time;
+    particle.opacity = opacity;
+  }
+};
+
+/**
+ * Samples the ballistic trajectory from absolute elapsed time, independent
+ * of how the interval was divided into animation frames.
+ */
+export const sampleParticlesAtElapsed = ({
+  initialParticles,
+  elapsed,
+  lifetime = TIMING_CONFIG.particleLifetime,
+}: SampleParticlesOptions): Particle[] => {
+  const sampledParticles = initialParticles.map((particle) => ({
     ...particle,
-    x: particle.x + particle.vx * dt,
-    y: particle.y + particle.vy * dt,
-    vx: particle.vx * Math.pow(AIR_RESISTANCE, dt),
-    vy: particle.vy + GRAVITY * dt,
-    rotation: particle.rotation + particle.rotationSpeed * dt,
-    opacity: Math.max(0, 1 - elapsed / lifetime),
   }));
+  sampleParticlesAtElapsedInPlace({
+    initialParticles,
+    particles: sampledParticles,
+    elapsed,
+    lifetime,
+  });
+  return sampledParticles;
 };
 
 export const GEM_PARTICLE_COLORS: Record<GemType, string> = {

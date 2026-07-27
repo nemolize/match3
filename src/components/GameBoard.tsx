@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 
 import { BoardCell } from "@/components/BoardCell";
 import { BreakingGemsLayer } from "@/components/BreakingGemsLayer";
+import { UnderwaterBackground } from "@/components/UnderwaterBackground";
 import { BOARD_GAP_REM, BOARD_SIZE, SWIPE_THRESHOLD } from "@/constants/game";
 import type { AnimationPhase, Gem, Match, Position } from "@/types/game";
 import { computeParticleOrigin } from "@/utils/boardLayout";
@@ -96,11 +97,15 @@ export const GameBoard = ({
 
   return (
     <motion.div
-      className="relative rounded-2xl bg-gray-800 p-2 shadow-2xl sm:p-4"
+      className="relative isolate rounded-2xl p-2 shadow-2xl ring-1 ring-white/10 sm:p-4"
       initial={{ opacity: 0, scale: 0.92, rotateX: 12 }}
       animate={{ opacity: 1, scale: 1, rotateX: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
+      {/* Board-scoped animated backdrop. NOT `overflow-hidden` on this
+          panel — BreakingGemsLayer particles fly past its edge by design;
+          the canvas clips itself with its own rounded corners. */}
+      <UnderwaterBackground />
       <div
         ref={boardRef}
         aria-colcount={BOARD_SIZE}

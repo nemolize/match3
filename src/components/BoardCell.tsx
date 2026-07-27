@@ -60,7 +60,7 @@ const BoardCellImpl = ({
     <div
       aria-colindex={colIndex + 1}
       aria-rowindex={rowIndex + 1}
-      className="aspect-square rounded-lg bg-gray-700/80"
+      className="aspect-square rounded-lg bg-white/10"
       role="gridcell"
     >
       <AnimatePresence mode="popLayout">

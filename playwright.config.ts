@@ -1,5 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const webGpuLaunchArgs = [
+  "--enable-unsafe-webgpu",
+  "--use-webgpu-adapter=swiftshader",
+  "--use-gpu-in-tests",
+  ...(process.platform === "linux"
+    ? [
+        "--use-angle=vulkan",
+        "--enable-features=Vulkan",
+        "--disable-vulkan-surface",
+        "--use-vulkan=swiftshader",
+      ]
+    : []),
+];
+
 export default defineConfig({
   testDir: "./e2e-tests",
   fullyParallel: true,
@@ -10,18 +24,14 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5173",
     launchOptions: {
-      args: [
-        "--enable-unsafe-webgpu",
-        "--use-webgpu-adapter=swiftshader",
-        "--use-gpu-in-tests",
-      ],
+      args: webGpuLaunchArgs,
     },
     trace: "on-first-retry",
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], channel: "chromium" },
     },
   ],
   webServer: {

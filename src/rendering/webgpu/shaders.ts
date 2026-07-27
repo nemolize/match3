@@ -146,11 +146,12 @@ fn gemColor(gemType: i32) -> vec3f {
 
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   let p = abs(input.local);
-  let edge = max(p.x, p.y);
+  let silhouette = max(p.x, p.y) + min(p.x, p.y) * 0.14;
+  if (silhouette > 1.0) { discard; }
   let gloss = pow(max(0.0, 1.0 - distance(input.local, vec2f(-0.35, -0.45))), 4.0);
   let facet = 0.82 + 0.18 * cos(atan2(input.local.y, input.local.x) * 8.0);
   var color = gemColor(i32(input.gemType)) * facet + vec3f(gloss * 0.7);
-  if (input.selected > 0.5 && edge > 0.82) { color = vec3f(1.0); }
+  if (input.selected > 0.5 && silhouette > 0.82) { color = vec3f(1.0); }
   return vec4f(color, 0.88);
 }
 `;

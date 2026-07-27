@@ -146,7 +146,6 @@ fn gemColor(gemType: i32) -> vec3f {
 
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   let p = abs(input.local);
-  if (max(p.x, p.y) + min(p.x, p.y) * 0.42 > 1.0) { discard; }
   let edge = max(p.x, p.y);
   let gloss = pow(max(0.0, 1.0 - distance(input.local, vec2f(-0.35, -0.45))), 4.0);
   let facet = 0.82 + 0.18 * cos(atan2(input.local.y, input.local.x) * 8.0);

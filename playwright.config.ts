@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { e2eSoftwareWebGpuLaunchArgs } from "./playwright.webgpu";
+
 export default defineConfig({
   testDir: "./e2e-tests",
   fullyParallel: true,
@@ -9,12 +11,15 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: "http://localhost:5173",
+    launchOptions: {
+      args: e2eSoftwareWebGpuLaunchArgs,
+    },
     trace: "on-first-retry",
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], channel: "chromium" },
     },
   ],
   webServer: {

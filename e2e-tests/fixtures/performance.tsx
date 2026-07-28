@@ -4,11 +4,11 @@ import { MotionConfig } from "motion/react";
 import { useCallback, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import type { ParticleWorkloadSnapshot } from "@/components/BreakingGemsLayer";
 import { GameBoard } from "@/components/GameBoard";
 import { TIMING_CONFIG } from "@/config/timing";
 import { BOARD_SIZE, GEM_TYPES } from "@/constants/game";
 import type { Gem, Match } from "@/types/game";
+import type { ParticleWorkloadSnapshot } from "@/types/performance";
 
 const createBoard = (): Gem[][] =>
   Array.from({ length: BOARD_SIZE }, (_, row) =>

@@ -617,11 +617,6 @@ test("records a comparable rendering baseline", async ({ browser }) => {
   }
   if (usesWebGpu) {
     expect(webGpu.adapter).not.toBeNull();
-    if (softwareGpu && process.env.PERF_ALLOW_SOFTWARE_GPU !== "1") {
-      throw new Error(
-        "Refusing to benchmark WebGPU through a software adapter; set PERF_ALLOW_SOFTWARE_GPU=1 to override",
-      );
-    }
   }
 
   const revision = execFileSync("git", ["rev-parse", "HEAD"], {

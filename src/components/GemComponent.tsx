@@ -1,8 +1,7 @@
 import { memo, type MouseEvent } from "react";
 
-import { GEM_NAMES, GEM_STYLES, GEM_VARIANT_CLASSES } from "@/constants/game";
+import { GEM_NAMES } from "@/constants/game";
 import type { Gem } from "@/types/game";
-import { cn } from "@/utils/cn";
 
 interface GemComponentProps {
   gem: Gem;
@@ -10,24 +9,12 @@ interface GemComponentProps {
   onActivate: () => void;
 }
 
-// Scale/opacity animation (entry/exit, `whileHover`/`whileTap`) is owned
-// by the motion wrapper in BoardCell; this component intentionally applies
-// no scale/opacity styling of its own so the two layers don't animate the
-// same properties against each other.
-//
-// **Do NOT restore `transition-all` or `active:scale-95` on the button
-// below.** Both would put a second scale animator on top of the motion
-// wrapper's scale, which is a compounded-transform bug (e.g. 0.95 × 0.95
-// during a tap) and produces duplicate style recalcs. Uniformity refactors
-// that copy the pattern from GameHeader must stop at GemComponent's edge.
 export const GemComponent = memo(function GemComponent({
   gem,
   isSelected,
   onActivate,
 }: GemComponentProps) {
-  const gemColorClass = GEM_VARIANT_CLASSES[gem.type];
   const gemName = GEM_NAMES[gem.type];
-  const gemShadowClass = GEM_STYLES[gem.type];
 
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     // Pointer taps are handled by the gesture layer in GameBoard; only
@@ -44,22 +31,8 @@ export const GemComponent = memo(function GemComponent({
       key={gem.id}
       aria-label={`${gemName} gem`}
       aria-pressed={isSelected}
-      className={cn(
-        "gem-crystal relative h-full w-full cursor-pointer shadow-lg transition-[filter] duration-200 select-none hover:brightness-110",
-        gemColorClass,
-        gemShadowClass,
-      )}
+      className="relative h-full w-full cursor-pointer rounded-lg bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-cyan-900"
       onClick={handleClick}
-    >
-      <div aria-hidden="true" className="gem-crystal__surface" />
-      <div aria-hidden="true" className="gem-crystal__pattern" />
-      <div aria-hidden="true" className="gem-crystal__refraction" />
-      <div aria-hidden="true" className="gem-crystal__gloss" />
-
-      {/* Selection indicator */}
-      {isSelected && (
-        <div aria-hidden="true" className="gem-crystal__selection" />
-      )}
-    </button>
+    />
   );
 });

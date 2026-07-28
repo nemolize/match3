@@ -2,6 +2,8 @@ import process from "node:process";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { softwareWebGpuLaunchArgs } from "./playwright.webgpu";
+
 const browserChannel = process.env.PERF_BROWSER_CHANNEL;
 const headless = process.env.PERF_HEADLESS !== "0";
 
@@ -18,6 +20,11 @@ export default defineConfig({
     baseURL: "http://localhost:5173",
     channel: browserChannel || undefined,
     headless,
+    launchOptions: browserChannel
+      ? undefined
+      : {
+          args: softwareWebGpuLaunchArgs,
+        },
     trace: "off",
     viewport: { width: 1280, height: 900 },
   },

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 
+import { GEM_CELL_PADDING_PX } from "@/constants/game";
+
 import {
   createParticles,
   sampleParticlesAtElapsed,
   sampleParticlesAtElapsedInPlace,
 } from "./particleLogic";
-
-const CELL_PADDING = 4;
 
 describe("particleLogic", () => {
   describe("createParticles", () => {
@@ -46,8 +46,8 @@ describe("particleLogic", () => {
 
       const particles = createParticles({ x, y, size, count: 8 });
 
-      const expectedCenterX = x + CELL_PADDING + size / 2;
-      const expectedCenterY = y + CELL_PADDING + size / 2;
+      const expectedCenterX = x + GEM_CELL_PADDING_PX + size / 2;
+      const expectedCenterY = y + GEM_CELL_PADDING_PX + size / 2;
 
       particles.forEach((particle) => {
         // All particles should start at the gem center
@@ -66,8 +66,8 @@ describe("particleLogic", () => {
       testCases.forEach(({ x, y, size }) => {
         const particles = createParticles({ x, y, size, count: 4 });
 
-        const expectedX = x + CELL_PADDING + size / 2;
-        const expectedY = y + CELL_PADDING + size / 2;
+        const expectedX = x + GEM_CELL_PADDING_PX + size / 2;
+        const expectedY = y + GEM_CELL_PADDING_PX + size / 2;
 
         particles.forEach((particle) => {
           expect(particle.x).toBe(expectedX);

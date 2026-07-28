@@ -14,6 +14,7 @@ A modern match-3 puzzle game built with React, TypeScript, and Vite. Features sm
 ## Technical Features
 
 - **React** with TypeScript
+- **WebGPU** board, gem, and fragment rendering with a semantic DOM overlay
 - **Motion** for smooth animations
 - **@use-gesture/react** for touch gesture handling
 - **Vite** for fast development and building
@@ -21,6 +22,9 @@ A modern match-3 puzzle game built with React, TypeScript, and Vite. Features sm
 - **Vitest** for unit testing with Testing Library
 - **Playwright** for end-to-end testing
 - **Renovate** for automated dependency updates
+
+The rendering architecture and extension points are documented in
+[`docs/rendering/webgpu.md`](docs/rendering/webgpu.md).
 
 ## Getting Started
 

@@ -1,18 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const webGpuLaunchArgs = [
-  "--enable-unsafe-webgpu",
-  "--use-webgpu-adapter=swiftshader",
-  "--use-gpu-in-tests",
-  ...(process.platform === "linux"
-    ? [
-        "--use-angle=vulkan",
-        "--enable-features=Vulkan",
-        "--disable-vulkan-surface",
-        "--use-vulkan=swiftshader",
-      ]
-    : []),
-];
+import { e2eSoftwareWebGpuLaunchArgs } from "./playwright.webgpu";
 
 export default defineConfig({
   testDir: "./e2e-tests",
@@ -24,7 +12,7 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5173",
     launchOptions: {
-      args: webGpuLaunchArgs,
+      args: e2eSoftwareWebGpuLaunchArgs,
     },
     trace: "on-first-retry",
   },

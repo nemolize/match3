@@ -1,3 +1,5 @@
+import { fragmentInstanceStruct, gemInstanceStruct } from "./instanceLayout";
+
 const frameUniformStruct = /* wgsl */ `
 struct Frame {
   canvas: vec2f,
@@ -88,7 +90,10 @@ struct Output {
 export const gemShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
-@group(0) @binding(1) var<storage, read> instances: array<vec4f>;
+
+${gemInstanceStruct}
+
+@group(0) @binding(1) var<storage, read> instances: array<GemInstance>;
 
 struct Output {
   @builtin(position) position: vec4f,
@@ -110,12 +115,22 @@ fn ease(progress: f32, mode: f32) -> f32 {
     vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
     vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0)
   );
-  let a = instances[instanceIndex * 3u];
-  let b = instances[instanceIndex * 3u + 1u];
-  let c = instances[instanceIndex * 3u + 2u];
-  let rawProgress = select(1.0, clamp((frame.timeMs - b.x) / b.y, 0.0, 1.0), b.y > 0.0);
-  let progress = ease(rawProgress, c.x);
-  let cell = mix(a.xy, a.zw, progress);
+  let instance = instances[instanceIndex];
+  let rawProgress = select(
+    1.0,
+    clamp(
+      (frame.timeMs - instance.startedAt) / instance.duration,
+      0.0,
+      1.0
+    ),
+    instance.duration > 0.0
+  );
+  let progress = ease(rawProgress, instance.animationMode);
+  let cell = mix(
+    vec2f(instance.fromCol, instance.fromRow),
+    vec2f(instance.toCol, instance.toRow),
+    progress
+  );
   let step = frame.cellSize + frame.gap;
   let center = frame.boardOrigin + vec2f(cell.x, cell.y) * step + vec2f(frame.cellSize * 0.5);
   let local = corners[vertexIndex];
@@ -128,8 +143,8 @@ fn ease(progress: f32, mode: f32) -> f32 {
     1.0
   );
   output.local = local;
-  output.gemType = b.z;
-  output.selected = b.w;
+  output.gemType = instance.gemType;
+  output.selected = instance.selected;
   return output;
 }
 
@@ -159,7 +174,10 @@ fn gemColor(gemType: i32) -> vec3f {
 export const fragmentShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
-@group(0) @binding(1) var<storage, read> instances: array<vec4f>;
+
+${fragmentInstanceStruct}
+
+@group(0) @binding(1) var<storage, read> instances: array<FragmentInstance>;
 
 struct Output {
   @builtin(position) position: vec4f,
@@ -176,23 +194,23 @@ struct Output {
     vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
     vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0)
   );
-  let a = instances[instanceIndex * 3u];
-  let b = instances[instanceIndex * 3u + 1u];
-  let c = instances[instanceIndex * 3u + 2u];
-  let elapsed = max(0.0, frame.timeMs - b.w);
+  let instance = instances[instanceIndex];
+  let elapsed = max(0.0, frame.timeMs - instance.spawnedAt);
   let ticks = elapsed / (1000.0 / 60.0);
   let normalizedCenter = vec2f(
-    a.x + a.w * ticks,
-    a.y + b.x * ticks + 0.5 * c.z * ticks * ticks
+    instance.centerX + instance.velocityX * ticks,
+    instance.centerY
+      + instance.velocityY * ticks
+      + 0.5 * instance.gravity * ticks * ticks
   );
   let center = frame.boardOrigin + normalizedCenter * frame.boardSize;
-  let angle = radians(b.y + b.z * ticks);
+  let angle = radians(instance.rotation + instance.rotationSpeed * ticks);
   let local = corners[vertexIndex];
   let rotated = vec2f(
     local.x * cos(angle) - local.y * sin(angle),
     local.x * sin(angle) + local.y * cos(angle)
   );
-  let pixel = center + rotated * a.z * frame.boardSize * 0.5;
+  let pixel = center + rotated * instance.size * frame.boardSize * 0.5;
   var output: Output;
   output.position = vec4f(
     pixel.x / frame.canvas.x * 2.0 - 1.0,
@@ -201,8 +219,8 @@ struct Output {
     1.0
   );
   output.local = local;
-  output.gemType = c.x;
-  output.alpha = max(0.0, 1.0 - elapsed / c.y);
+  output.gemType = instance.gemType;
+  output.alpha = max(0.0, 1.0 - elapsed / instance.lifetime);
   return output;
 }
 

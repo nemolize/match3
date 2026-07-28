@@ -4,10 +4,9 @@ const { defaultBrowserType: _defaultBrowserType, ...iPhoneSE } =
   devices["iPhone SE"];
 
 const expectWebGpuReady = async (page) => {
-  const canvas = page.locator(
-    'canvas[data-renderer="webgpu"][data-renderer-status="ready"]',
-  );
+  const canvas = page.locator('canvas[data-renderer="webgpu"]');
   await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-renderer-status", "ready");
   await expect(page.getByRole("alert")).toHaveCount(0);
   return canvas;
 };

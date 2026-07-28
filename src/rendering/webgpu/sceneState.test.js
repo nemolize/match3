@@ -1,9 +1,14 @@
 import { describe, expect, test } from "vitest";
 
+import { fragmentInstanceStruct, gemInstanceStruct } from "./instanceLayout";
 import {
   advanceWaterTime,
   collectNewFragmentBursts,
+  FRAGMENT_INSTANCE_LAYOUT,
+  FRAGMENT_INSTANCE_STRIDE,
   fragmentCount,
+  GEM_INSTANCE_LAYOUT,
+  GEM_INSTANCE_STRIDE,
   packFragmentBursts,
   packGemScene,
 } from "./sceneState";
@@ -28,6 +33,44 @@ const scene = (board, overrides = {}) => ({
 });
 
 describe("WebGPU scene packing", () => {
+  test("derives matching CPU and WGSL instance layouts", () => {
+    const expectMatchingLayout = (layout, stride, wgsl) => {
+      const offsets = Object.values(layout).sort((left, right) => left - right);
+      expect(offsets).toEqual(
+        Array.from({ length: stride }, (_, index) => index),
+      );
+      expect(wgsl.match(/: f32,/g)).toHaveLength(stride);
+    };
+
+    expectMatchingLayout(
+      GEM_INSTANCE_LAYOUT,
+      GEM_INSTANCE_STRIDE,
+      gemInstanceStruct,
+    );
+    expectMatchingLayout(
+      FRAGMENT_INSTANCE_LAYOUT,
+      FRAGMENT_INSTANCE_STRIDE,
+      fragmentInstanceStruct,
+    );
+  });
+
+  test("uses stable GPU indices for every gem type", () => {
+    const board = emptyBoard();
+    ["red", "blue", "green", "yellow", "purple", "orange"].forEach(
+      (type, col) => {
+        board[0][col] = gem(type, type, 0, col);
+      },
+    );
+
+    const packed = packGemScene(scene(board), new Map(), 0);
+    const gemTypeIndices = Array.from({ length: 6 }, (_, index) => {
+      const offset = index * GEM_INSTANCE_STRIDE;
+      return packed.data[offset + GEM_INSTANCE_LAYOUT.gemType];
+    });
+
+    expect(gemTypeIndices).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
   test("clamps water time after a long frame stall", () => {
     expect(advanceWaterTime(120, 1000, 5000, 50)).toBe(170);
     expect(advanceWaterTime(120, null, 5000, 50)).toBe(120);

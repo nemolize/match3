@@ -75,10 +75,10 @@ const createPipeline = (
     primitive: { topology: "triangle-list" },
   });
 
-const alphaBlend: GPUBlendState = {
+const createSourceOverBlend = (srcFactor: GPUBlendFactor): GPUBlendState => ({
   color: {
     operation: "add",
-    srcFactor: "src-alpha",
+    srcFactor,
     dstFactor: "one-minus-src-alpha",
   },
   alpha: {
@@ -86,7 +86,17 @@ const alphaBlend: GPUBlendState = {
     srcFactor: "one",
     dstFactor: "one-minus-src-alpha",
   },
-};
+});
+
+const alphaBlend = createSourceOverBlend("src-alpha");
+export const gemBlendState = createSourceOverBlend("one");
+
+export const createGemPipeline = (
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  module: GPUShaderModule,
+): GPURenderPipeline =>
+  createPipeline(device, format, module, gemBlendState, "gem-refraction");
 
 const unavailable = (
   callbacks: BoardRendererCallbacks,
@@ -152,13 +162,7 @@ export const createBoardRenderer = async (
       undefined,
       "texture-blit",
     );
-    const gemPipeline = createPipeline(
-      device,
-      format,
-      gemModule,
-      alphaBlend,
-      "gem-refraction",
-    );
+    const gemPipeline = createGemPipeline(device, format, gemModule);
     const fragmentPipeline = createPipeline(
       device,
       format,
@@ -245,13 +249,7 @@ export const createBoardRenderer = async (
     let backgroundTextureView: GPUTextureView | null = null;
     let sceneTextureView: GPUTextureView | null = null;
     let backgroundBindGroup: GPUBindGroup | null = null;
-    const gemBindGroup = device.createBindGroup({
-      layout: gemPipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: uniformBuffer } },
-        { binding: 1, resource: { buffer: gemBuffer } },
-      ],
-    });
+    let gemBindGroup: GPUBindGroup | null = null;
     let fragmentBindGroup = device.createBindGroup({
       layout: fragmentPipeline.getBindGroupLayout(0),
       entries: [
@@ -431,6 +429,15 @@ export const createBoardRenderer = async (
           { binding: 1, resource: backgroundTextureView },
         ],
       });
+      gemBindGroup = device.createBindGroup({
+        layout: gemPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: gemBuffer } },
+          { binding: 2, resource: sampler },
+          { binding: 3, resource: backgroundTextureView },
+        ],
+      });
       compositeBindGroup = device.createBindGroup({
         layout: blitPipeline.getBindGroupLayout(0),
         entries: [
@@ -451,6 +458,7 @@ export const createBoardRenderer = async (
         !backgroundTextureView ||
         !sceneTextureView ||
         !backgroundBindGroup ||
+        !gemBindGroup ||
         !compositeBindGroup
       ) {
         return;

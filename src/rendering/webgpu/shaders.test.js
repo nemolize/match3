@@ -11,7 +11,7 @@ describe("gem shader optics", () => {
   });
 
   test("keeps the optical surface translucent", () => {
-    expect(gemShader).toContain("const GEM_SURFACE_ALPHA: f32 = 0.72;");
+    expect(gemShader).toContain("const GEM_SURFACE_ALPHA: f32 = 0.9;");
     expect(gemShader).toContain("vec4f(color, GEM_SURFACE_ALPHA)");
   });
 });

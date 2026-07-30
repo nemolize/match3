@@ -100,7 +100,12 @@ ${gemInstanceStruct}
 const GEM_IOR: f32 = 1.47;
 const REFRACTION_UV_SCALE: f32 = 0.045;
 const REFLECTION_UV_SCALE: f32 = 0.06;
-const GEM_SURFACE_ALPHA: f32 = 0.72;
+const GEM_SURFACE_ALPHA: f32 = 0.9;
+const SILHOUETTE_MINOR_WEIGHT: f32 = 0.14;
+const TABLE_MINOR_WEIGHT: f32 = 0.22;
+const TABLE_RADIUS: f32 = 0.5;
+const CORNER_FACET_WIDTH: f32 = 0.16;
+const GIRDLE_START: f32 = 0.86;
 
 struct Output {
   @builtin(position) position: vec4f,
@@ -197,18 +202,56 @@ fn fresnelSchlick(cosine: f32, baseReflectance: f32) -> f32 {
       grazing;
 }
 
+fn gemSilhouette(p: vec2f) -> f32 {
+  return max(p.x, p.y) + min(p.x, p.y) * SILHOUETTE_MINOR_WEIGHT;
+}
+
+fn gemTableShape(p: vec2f) -> f32 {
+  return max(p.x, p.y) + min(p.x, p.y) * TABLE_MINOR_WEIGHT;
+}
+
+fn gemSurfaceNormal(local: vec2f) -> vec3f {
+  let p = abs(local);
+  let tableShape = gemTableShape(p);
+  let silhouette = gemSilhouette(p);
+  var normalXY = vec2f(-0.035, -0.055);
+
+  if (tableShape > TABLE_RADIUS) {
+    if (abs(p.x - p.y) < CORNER_FACET_WIDTH) {
+      normalXY = vec2f(sign(local.x) * 0.54, sign(local.y) * 0.54);
+    } else if (p.x > p.y) {
+      normalXY = vec2f(sign(local.x) * 0.68, sign(local.y) * 0.16);
+    } else {
+      normalXY = vec2f(sign(local.x) * 0.16, sign(local.y) * 0.68);
+    }
+  }
+
+  if (silhouette > GIRDLE_START) {
+    if (p.x > p.y) {
+      normalXY = normalize(vec2f(
+        sign(local.x),
+        sign(local.y) * SILHOUETTE_MINOR_WEIGHT
+      )) * 0.78;
+    } else {
+      normalXY = normalize(vec2f(
+        sign(local.x) * SILHOUETTE_MINOR_WEIGHT,
+        sign(local.y)
+      )) * 0.78;
+    }
+  }
+
+  return normalize(vec3f(
+    normalXY,
+    sqrt(max(0.12, 1.0 - dot(normalXY, normalXY)))
+  ));
+}
+
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   let p = abs(input.local);
-  let silhouette = max(p.x, p.y) + min(p.x, p.y) * 0.14;
+  let silhouette = gemSilhouette(p);
   if (silhouette > 1.0) { discard; }
 
-  let facetWave =
-    1.0 - 2.0 * abs(abs(input.local.x) - abs(input.local.y));
-  let normalXY = input.local * (0.52 + facetWave * 0.06);
-  let surfaceNormal = normalize(vec3f(
-    normalXY,
-    sqrt(max(0.18, 1.0 - dot(normalXY, normalXY)))
-  ));
+  let surfaceNormal = gemSurfaceNormal(input.local);
   let viewDirection = vec3f(0.0, 0.0, 1.0);
   let incidentDirection = -viewDirection;
   let refractedBackground = sampleRefraction(
@@ -231,8 +274,12 @@ fn fresnelSchlick(cosine: f32, baseReflectance: f32) -> f32 {
   ).rgb;
   let gem = gemColor(i32(input.gemType));
   let radial = length(input.local);
-  let transmissionTint = mix(vec3f(0.94), gem, 0.46 + radial * 0.12);
-  let transmission = refractedBackground * transmissionTint;
+  let keyLight = normalize(vec3f(-0.48, -0.58, 1.0));
+  let facetLight = 0.68 + 0.32 * max(0.0, dot(surfaceNormal, keyLight));
+  let transmissionTint = mix(vec3f(0.62), gem, 0.7);
+  let transmission =
+    refractedBackground * transmissionTint * 0.58 +
+    gem * facetLight * (0.34 + radial * 0.06);
   let fresnel = fresnelSchlick(
     clamp(dot(viewDirection, surfaceNormal), 0.0, 1.0),
     0.036
@@ -243,14 +290,26 @@ fn fresnelSchlick(cosine: f32, baseReflectance: f32) -> f32 {
     0.28 + max(0.0, -reflectionDirection.y) * 0.28
   );
   var color = mix(transmission, reflection, clamp(fresnel * 1.9, 0.08, 0.72));
-  let keyLight = normalize(vec3f(-0.48, -0.58, 1.0));
   let glossBase = max(0.0, dot(surfaceNormal, keyLight));
   let glossSquared = glossBase * glossBase;
   let glossFourth = glossSquared * glossSquared;
   let glossEighth = glossFourth * glossFourth;
   let gloss = glossEighth * glossEighth * glossEighth * glossFourth;
   color += vec3f(gloss * 0.7);
-  color += gem * (0.05 + max(0.0, facetWave) * 0.035);
+  let tableShape = gemTableShape(p);
+  let tableRidge =
+    1.0 - smoothstep(0.0, 0.035, abs(tableShape - TABLE_RADIUS));
+  let crownRidge =
+    (1.0 - smoothstep(
+      0.0,
+      0.035,
+      abs(abs(p.x - p.y) - CORNER_FACET_WIDTH)
+    )) *
+    smoothstep(TABLE_RADIUS - 0.02, TABLE_RADIUS + 0.08, tableShape);
+  let girdleRidge =
+    1.0 - smoothstep(0.0, 0.025, abs(silhouette - GIRDLE_START));
+  color += mix(gem, vec3f(1.0), 0.55) *
+    (tableRidge * 0.12 + crownRidge * 0.045 + girdleRidge * 0.05);
   if (input.selected > 0.5 && silhouette > 0.82) { color = vec3f(1.0); }
   return vec4f(color, GEM_SURFACE_ALPHA);
 }

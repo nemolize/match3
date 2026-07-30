@@ -41,8 +41,8 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedOpticalSignature = [
-  9.1, -8, -8.2, 3.4, -2, -1.1, -1.2, -9.4, -7, 16.4, 0.6, -2.1, -4.1, -4.1,
-  -1.9, 16.4, -5.6, -11.8, 11.4, 0.3, -0.6, 12.9, 0.9, -2.2,
+  -34.4, 0.8, -6, -22.3, 16.6, -6, -23.9, -18.3, -47.7, -1.6, -21, -34.4, 3.4,
+  -14.8, -33.1, -35.4, -39.9, -1.9, -15.3, -34.3, 1.5, -12.5, -33.3, -28.8,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -110,9 +110,11 @@ test("renders deterministic refill state through WebGPU", async ({ page }) => {
   expect(timings?.passes?.gemRefraction?.sampleCount).toBe(1);
 });
 
-test("renders translucent optical gems over the water", async ({ page }) => {
+test("renders distinguishable faceted optical gems over the water", async ({
+  page,
+}) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/e2e-tests/fixtures/drop.html");
+  await page.goto("/e2e-tests/fixtures/optics.html");
   const canvas = await expectWebGpuReady(page);
   const opticalCapture = await captureCanvasFrame(canvas);
 
@@ -167,10 +169,12 @@ test("renders translucent optical gems over the water", async ({ page }) => {
         maximumY = Math.max(maximumY, y);
       }
 
-      const signatureColumns = 3;
-      const signatureRows = 8;
+      const signatureColumns = 8;
+      const signatureRows = 3;
       const signatureSums = Array(signatureColumns * signatureRows).fill(0);
       const signatureCounts = Array(signatureColumns * signatureRows).fill(0);
+      const gemColorSums = Array.from({ length: 6 }, () => [0, 0, 0]);
+      const gemColorCounts = Array(6).fill(0);
       const opticalWidth = maximumX - minimumX + 1;
       const opticalHeight = maximumY - minimumY + 1;
       for (let y = minimumY; y <= maximumY; y += 1) {
@@ -195,11 +199,48 @@ test("renders translucent optical gems over the water", async ({ page }) => {
           const signatureIndex = row * signatureColumns + column;
           signatureSums[signatureIndex] += opticalLuminance - emptyLuminance;
           signatureCounts[signatureIndex] += 1;
+          const colorDelta =
+            Math.abs(
+              (optical.data[pixelOffset] ?? 0) - (empty.data[pixelOffset] ?? 0),
+            ) +
+            Math.abs(
+              (optical.data[pixelOffset + 1] ?? 0) -
+                (empty.data[pixelOffset + 1] ?? 0),
+            ) +
+            Math.abs(
+              (optical.data[pixelOffset + 2] ?? 0) -
+                (empty.data[pixelOffset + 2] ?? 0),
+            );
+          if (colorDelta > 6) {
+            const gemIndex = Math.min(
+              gemColorSums.length - 1,
+              Math.floor(((x - minimumX) / opticalWidth) * 6),
+            );
+            const gemColorSum = gemColorSums[gemIndex];
+            if (gemColorSum) {
+              gemColorSum[0] +=
+                (optical.data[pixelOffset] ?? 0) -
+                (empty.data[pixelOffset] ?? 0);
+              gemColorSum[1] +=
+                (optical.data[pixelOffset + 1] ?? 0) -
+                (empty.data[pixelOffset + 1] ?? 0);
+              gemColorSum[2] +=
+                (optical.data[pixelOffset + 2] ?? 0) -
+                (empty.data[pixelOffset + 2] ?? 0);
+              gemColorCounts[gemIndex] += 1;
+            }
+          }
         }
       }
 
       return {
         changedPixels,
+        gemColorDeltas: gemColorSums.map((sum, index) =>
+          sum.map(
+            (channel) =>
+              Math.round((channel / (gemColorCounts[index] ?? 1)) * 10) / 10,
+          ),
+        ),
         meanChangedChannelDelta: channelDelta / changedPixels,
         opticalSignature: signatureSums.map(
           (sum, index) => Math.round((sum / signatureCounts[index]) * 10) / 10,
@@ -211,7 +252,23 @@ test("renders translucent optical gems over the water", async ({ page }) => {
 
   expect(difference.changedPixels).toBeGreaterThan(1_000);
   expect(difference.meanChangedChannelDelta).toBeGreaterThan(8);
-  expect(difference.meanChangedChannelDelta).toBeLessThan(48);
+  expect(difference.meanChangedChannelDelta).toBeLessThan(72);
+  for (let left = 0; left < difference.gemColorDeltas.length; left += 1) {
+    for (
+      let right = left + 1;
+      right < difference.gemColorDeltas.length;
+      right += 1
+    ) {
+      const leftColor = difference.gemColorDeltas[left] ?? [];
+      const rightColor = difference.gemColorDeltas[right] ?? [];
+      const distance = Math.hypot(
+        (leftColor[0] ?? 0) - (rightColor[0] ?? 0),
+        (leftColor[1] ?? 0) - (rightColor[1] ?? 0),
+        (leftColor[2] ?? 0) - (rightColor[2] ?? 0),
+      );
+      expect(distance).toBeGreaterThan(40);
+    }
+  }
   expect(difference.opticalSignature).toHaveLength(
     expectedOpticalSignature.length,
   );

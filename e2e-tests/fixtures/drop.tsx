@@ -56,19 +56,11 @@ const DropFixture = () => {
     setBoard(droppedBoard);
   };
 
-  const clearBoard = () => {
-    setAnimationPhase("idle");
-    setBoard(createBoard());
-  };
-
   return (
     <MotionConfig reducedMotion="never">
       <main className="mx-auto w-96 p-4">
         <button type="button" onClick={startDrop}>
           Start drop
-        </button>
-        <button type="button" onClick={clearBoard}>
-          Clear board
         </button>
         <GameBoard
           board={board}

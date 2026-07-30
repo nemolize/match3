@@ -21,16 +21,19 @@ describe("gem shader optics", () => {
     );
   });
 
-  test("reduces background transmission through deeper facets", () => {
+  test("strengthens body color while reducing background transmission", () => {
     expect(gemShader).toContain(
-      "const SHALLOW_BACKGROUND_TRANSMISSION: f32 = 0.46;",
+      "const SHALLOW_BACKGROUND_TRANSMISSION: f32 = 0.34;",
     );
     expect(gemShader).toContain(
-      "const DEEP_BACKGROUND_TRANSMISSION: f32 = 0.1;",
+      "const DEEP_BACKGROUND_TRANSMISSION: f32 = 0.04;",
     );
     expect(gemShader).toContain(
       "refractedBackground * transmissionTint * backgroundTransmission",
     );
+    expect(gemShader).toContain("const SHALLOW_GEM_BODY_LIGHT: f32 = 0.62;");
+    expect(gemShader).toContain("const DEEP_GEM_BODY_LIGHT: f32 = 0.78;");
+    expect(gemShader).toContain("const TRANSMISSION_GEM_TINT: f32 = 0.88;");
   });
 
   test("keeps specular and ridge highlights outside surface alpha", () => {

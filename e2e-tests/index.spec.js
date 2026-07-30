@@ -41,13 +41,13 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -29, 9.7, 9.7, -11.1, 40.4, 3.6, -14, 0.3, -36, 10.8, -8.9, -22.2, 30.9, -2.9,
-  -23.6, -18.7, -30.7, 14, -4.4, -17.7, 30.8, -1, -25.8, -9.5,
+  -23.7, 17.4, 16, -2.3, 55.9, 9.9, -9.3, 11.7, -28.7, 21.6, -1.2, -11, 50, 4.6,
+  -17.8, -4.4, -25.6, 22.7, 1.8, -9.8, 46.2, 5, -22.4, 1.2,
 ];
 
 const expectedFacetSignature = [
-  0.97, -0.99, 1.38, 1.29, 1.41, 1.36, 1.39, 1.24, -1.38, -0.38, -0.97, -1.14,
-  -0.7, -1.03, -0.48, -1.21, 0.4, 1.37, -0.4, -0.15, -0.72, -0.33, -0.91, -0.03,
+  1.12, -1.39, 1.4, 1.4, 1.3, 1.41, 1.33, 1.33, -1.31, 0.45, -0.9, -0.86, -0.18,
+  -0.79, -0.24, -1.08, 0.19, 0.93, -0.5, -0.55, -1.13, -0.62, -1.09, -0.24,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -279,8 +279,13 @@ test("renders distinguishable faceted optical gems over the water", async ({
   );
 
   expect(difference.changedPixels).toBeGreaterThan(1_000);
-  expect(difference.meanChangedChannelDelta).toBeGreaterThan(8);
-  expect(difference.meanChangedChannelDelta).toBeLessThan(72);
+  expect(difference.meanChangedChannelDelta).toBeGreaterThan(68);
+  expect(difference.meanChangedChannelDelta).toBeLessThan(88);
+  difference.gemColorDeltas.forEach((colorDelta) => {
+    expect(
+      Math.hypot(colorDelta[0] ?? 0, colorDelta[1] ?? 0, colorDelta[2] ?? 0),
+    ).toBeGreaterThan(42);
+  });
   for (let left = 0; left < difference.gemColorDeltas.length; left += 1) {
     for (
       let right = left + 1;

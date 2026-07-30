@@ -34,10 +34,10 @@ const gemMaterialParameters = {
   deepAlpha: 1,
   opticalDepthStart: 0.18,
   minimumRefractionZ: 0.2,
-  shallowBackgroundTransmission: 0.46,
-  deepBackgroundTransmission: 0.1,
-  shallowBodyLight: 0.46,
-  deepBodyLight: 0.62,
+  shallowBackgroundTransmission: 0.34,
+  deepBackgroundTransmission: 0.04,
+  shallowBodyLight: 0.62,
+  deepBodyLight: 0.78,
 } as const;
 
 export const backgroundShader = /* wgsl */ `
@@ -134,7 +134,7 @@ const GIRDLE_START: f32 = 0.9;
 const FACET_AMBIENT_LIGHT: f32 = 0.74;
 const FACET_DIRECTIONAL_LIGHT: f32 = 0.26;
 const TRANSMISSION_NEUTRAL_TINT: f32 = 0.68;
-const TRANSMISSION_GEM_TINT: f32 = 0.72;
+const TRANSMISSION_GEM_TINT: f32 = 0.88;
 const SHALLOW_BACKGROUND_TRANSMISSION: f32 = ${gemMaterialParameters.shallowBackgroundTransmission};
 const DEEP_BACKGROUND_TRANSMISSION: f32 = ${gemMaterialParameters.deepBackgroundTransmission};
 const SHALLOW_GEM_BODY_LIGHT: f32 = ${gemMaterialParameters.shallowBodyLight};

@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { createBoardRenderer } from "./createBoardRenderer";
+import {
+  createBoardRenderer,
+  createGemPipeline,
+  gemBlendState,
+} from "./createBoardRenderer";
 
 const canvas = {
   getContext: () => ({}),
@@ -14,6 +18,39 @@ const environment = (gpu) => ({
 });
 
 describe("WebGPU renderer initialization", () => {
+  test("uses premultiplied source-over blending for gems", () => {
+    expect(gemBlendState).toEqual({
+      alpha: {
+        dstFactor: "one-minus-src-alpha",
+        operation: "add",
+        srcFactor: "one",
+      },
+      color: {
+        dstFactor: "one-minus-src-alpha",
+        operation: "add",
+        srcFactor: "one",
+      },
+    });
+
+    const createRenderPipeline = vi.fn(() => ({}));
+    const device = { createRenderPipeline };
+    const module = {};
+
+    createGemPipeline(device, "bgra8unorm", module);
+
+    expect(createRenderPipeline).toHaveBeenCalledWith({
+      fragment: {
+        entryPoint: "fragmentMain",
+        module,
+        targets: [{ blend: gemBlendState, format: "bgra8unorm" }],
+      },
+      label: "gem-refraction",
+      layout: "auto",
+      primitive: { topology: "triangle-list" },
+      vertex: { entryPoint: "vertexMain", module },
+    });
+  });
+
   test("reports an unavailable WebGPU API", async () => {
     const onStatusChange = vi.fn();
 

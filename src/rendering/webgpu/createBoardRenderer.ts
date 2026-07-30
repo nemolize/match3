@@ -75,10 +75,10 @@ const createPipeline = (
     primitive: { topology: "triangle-list" },
   });
 
-const alphaBlend: GPUBlendState = {
+const createSourceOverBlend = (srcFactor: GPUBlendFactor): GPUBlendState => ({
   color: {
     operation: "add",
-    srcFactor: "src-alpha",
+    srcFactor,
     dstFactor: "one-minus-src-alpha",
   },
   alpha: {
@@ -86,7 +86,17 @@ const alphaBlend: GPUBlendState = {
     srcFactor: "one",
     dstFactor: "one-minus-src-alpha",
   },
-};
+});
+
+const alphaBlend = createSourceOverBlend("src-alpha");
+export const gemBlendState = createSourceOverBlend("one");
+
+export const createGemPipeline = (
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  module: GPUShaderModule,
+): GPURenderPipeline =>
+  createPipeline(device, format, module, gemBlendState, "gem-refraction");
 
 const unavailable = (
   callbacks: BoardRendererCallbacks,
@@ -152,13 +162,7 @@ export const createBoardRenderer = async (
       undefined,
       "texture-blit",
     );
-    const gemPipeline = createPipeline(
-      device,
-      format,
-      gemModule,
-      alphaBlend,
-      "gem-refraction",
-    );
+    const gemPipeline = createGemPipeline(device, format, gemModule);
     const fragmentPipeline = createPipeline(
       device,
       format,

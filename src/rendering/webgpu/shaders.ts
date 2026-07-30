@@ -28,6 +28,18 @@ fn gemColor(gemType: i32) -> vec3f {
 }
 `;
 
+const gemMaterialParameters = {
+  ior: 1.47,
+  shallowAlpha: 0.82,
+  deepAlpha: 0.98,
+  opticalDepthStart: 0.18,
+  minimumRefractionZ: 0.2,
+  shallowBackgroundTransmission: 0.58,
+  deepBackgroundTransmission: 0.18,
+  shallowBodyLight: 0.38,
+  deepBodyLight: 0.56,
+} as const;
+
 export const backgroundShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -110,10 +122,11 @@ ${gemInstanceStruct}
 @group(0) @binding(2) var backgroundSampler: sampler;
 @group(0) @binding(3) var backgroundTexture: texture_2d<f32>;
 
-const GEM_IOR: f32 = 1.47;
+const GEM_IOR: f32 = ${gemMaterialParameters.ior};
 const REFRACTION_UV_SCALE: f32 = 0.045;
 const REFLECTION_UV_SCALE: f32 = 0.06;
-const GEM_SURFACE_ALPHA: f32 = 0.9;
+const SHALLOW_GEM_ALPHA: f32 = ${gemMaterialParameters.shallowAlpha};
+const DEEP_GEM_ALPHA: f32 = ${gemMaterialParameters.deepAlpha};
 const SILHOUETTE_MINOR_WEIGHT: f32 = 0.14;
 const TABLE_MINOR_WEIGHT: f32 = 0.22;
 const TABLE_RADIUS: f32 = 0.5;
@@ -123,8 +136,10 @@ const FACET_AMBIENT_LIGHT: f32 = 0.74;
 const FACET_DIRECTIONAL_LIGHT: f32 = 0.26;
 const TRANSMISSION_NEUTRAL_TINT: f32 = 0.68;
 const TRANSMISSION_GEM_TINT: f32 = 0.72;
-const BACKGROUND_TRANSMISSION: f32 = 0.58;
-const GEM_BODY_LIGHT: f32 = 0.42;
+const SHALLOW_BACKGROUND_TRANSMISSION: f32 = ${gemMaterialParameters.shallowBackgroundTransmission};
+const DEEP_BACKGROUND_TRANSMISSION: f32 = ${gemMaterialParameters.deepBackgroundTransmission};
+const SHALLOW_GEM_BODY_LIGHT: f32 = ${gemMaterialParameters.shallowBodyLight};
+const DEEP_GEM_BODY_LIGHT: f32 = ${gemMaterialParameters.deepBodyLight};
 const GEM_EDGE_LIGHT: f32 = 0.07;
 
 struct Output {
@@ -184,13 +199,16 @@ fn ease(progress: f32, mode: f32) -> f32 {
 
 ${gemColorFunction}
 
-fn sampleRefraction(screenUv: vec2f, surfaceNormal: vec3f) -> vec3f {
+fn refractedViewDirection(surfaceNormal: vec3f) -> vec3f {
   let incidentDirection = vec3f(0.0, 0.0, -1.0);
-  let direction = refract(
+  return refract(
     incidentDirection,
     surfaceNormal,
     1.0 / GEM_IOR
   );
+}
+
+fn sampleRefraction(screenUv: vec2f, direction: vec3f) -> vec3f {
   let refractedUv = clamp(
     screenUv + direction.xy * REFRACTION_UV_SCALE,
     vec2f(0.002),
@@ -257,6 +275,20 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
   ));
 }
 
+fn gemOpticalDepth(local: vec2f, refractionDirection: vec3f) -> f32 {
+  let silhouette = gemSilhouette(abs(local));
+  let thickness =
+    1.0 - smoothstep(${gemMaterialParameters.opticalDepthStart}, 1.0, silhouette);
+  return clamp(
+    thickness / max(
+      abs(refractionDirection.z),
+      ${gemMaterialParameters.minimumRefractionZ}
+    ),
+    0.0,
+    1.0
+  );
+}
+
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   let p = abs(input.local);
   let silhouette = gemSilhouette(p);
@@ -265,9 +297,10 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
   let surfaceNormal = gemSurfaceNormal(input.local);
   let viewDirection = vec3f(0.0, 0.0, 1.0);
   let incidentDirection = -viewDirection;
+  let refractionDirection = refractedViewDirection(surfaceNormal);
   let refractedBackground = sampleRefraction(
     input.screenUv,
-    surfaceNormal
+    refractionDirection
   );
   let uvMinimum = vec2f(0.002);
   let uvMaximum = vec2f(0.998);
@@ -284,6 +317,7 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
     reflectionUv
   ).rgb;
   let gem = gemColor(i32(input.gemType));
+  let opticalDepth = gemOpticalDepth(input.local, refractionDirection);
   let radial = length(input.local);
   let keyLight = normalize(vec3f(-0.48, -0.58, 1.0));
   let facetLight =
@@ -294,9 +328,19 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
     gem,
     TRANSMISSION_GEM_TINT
   );
+  let backgroundTransmission = mix(
+    SHALLOW_BACKGROUND_TRANSMISSION,
+    DEEP_BACKGROUND_TRANSMISSION,
+    opticalDepth
+  );
+  let gemBodyLight = mix(
+    SHALLOW_GEM_BODY_LIGHT,
+    DEEP_GEM_BODY_LIGHT,
+    opticalDepth
+  );
   let transmission =
-    refractedBackground * transmissionTint * BACKGROUND_TRANSMISSION +
-    gem * facetLight * (GEM_BODY_LIGHT + radial * GEM_EDGE_LIGHT);
+    refractedBackground * transmissionTint * backgroundTransmission +
+    gem * facetLight * (gemBodyLight + radial * GEM_EDGE_LIGHT);
   let fresnel = fresnelSchlick(
     clamp(dot(viewDirection, surfaceNormal), 0.0, 1.0),
     0.036
@@ -306,13 +350,17 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
     vec3f(0.72, 0.94, 1.0),
     0.28 + max(0.0, -reflectionDirection.y) * 0.28
   );
-  var color = mix(transmission, reflection, clamp(fresnel * 1.9, 0.08, 0.72));
+  let baseColor = mix(
+    transmission,
+    reflection,
+    clamp(fresnel * 1.9, 0.08, 0.72)
+  );
   let glossBase = max(0.0, dot(surfaceNormal, keyLight));
   let glossSquared = glossBase * glossBase;
   let glossFourth = glossSquared * glossSquared;
   let glossEighth = glossFourth * glossFourth;
   let gloss = glossEighth * glossEighth * glossEighth * glossFourth;
-  color += vec3f(gloss * 0.7);
+  var unattenuatedHighlight = vec3f(gloss * 0.7);
   let tableShape = gemTableShape(p);
   let tableRidge =
     1.0 - smoothstep(0.0, 0.035, abs(tableShape - TABLE_RADIUS));
@@ -325,10 +373,19 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
     smoothstep(TABLE_RADIUS - 0.02, TABLE_RADIUS + 0.08, tableShape);
   let girdleRidge =
     1.0 - smoothstep(0.0, 0.025, abs(silhouette - GIRDLE_START));
-  color += mix(gem, vec3f(1.0), 0.55) *
+  unattenuatedHighlight += mix(gem, vec3f(1.0), 0.55) *
     (tableRidge * 0.12 + crownRidge * 0.045 + girdleRidge * 0.05);
-  if (input.selected > 0.5 && silhouette > 0.82) { color = vec3f(1.0); }
-  return vec4f(color, GEM_SURFACE_ALPHA);
+  if (input.selected > 0.5 && silhouette > 0.82) {
+    return vec4f(1.0);
+  }
+  let surfaceAlpha = mix(
+    SHALLOW_GEM_ALPHA,
+    DEEP_GEM_ALPHA,
+    opticalDepth
+  );
+  let blendSourceColor =
+    baseColor * surfaceAlpha + unattenuatedHighlight;
+  return vec4f(blendSourceColor, surfaceAlpha);
 }
 `;
 

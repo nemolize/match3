@@ -30,14 +30,14 @@ fn gemColor(gemType: i32) -> vec3f {
 
 const gemMaterialParameters = {
   ior: 1.47,
-  shallowAlpha: 0.82,
-  deepAlpha: 0.98,
+  shallowAlpha: 0.9,
+  deepAlpha: 1,
   opticalDepthStart: 0.18,
   minimumRefractionZ: 0.2,
-  shallowBackgroundTransmission: 0.58,
-  deepBackgroundTransmission: 0.18,
-  shallowBodyLight: 0.38,
-  deepBodyLight: 0.56,
+  shallowBackgroundTransmission: 0.46,
+  deepBackgroundTransmission: 0.1,
+  shallowBodyLight: 0.46,
+  deepBodyLight: 0.62,
 } as const;
 
 export const backgroundShader = /* wgsl */ `

@@ -11,8 +11,8 @@ describe("gem shader optics", () => {
   });
 
   test("varies transmission alpha by optical depth", () => {
-    expect(gemShader).toContain("const SHALLOW_GEM_ALPHA: f32 = 0.82;");
-    expect(gemShader).toContain("const DEEP_GEM_ALPHA: f32 = 0.98;");
+    expect(gemShader).toContain("const SHALLOW_GEM_ALPHA: f32 = 0.9;");
+    expect(gemShader).toContain("const DEEP_GEM_ALPHA: f32 = 1;");
     expect(gemShader).toContain("fn gemOpticalDepth(");
     expect(gemShader).toContain("vec4f(blendSourceColor, surfaceAlpha)");
     expect(gemShader).toContain("fn refractedViewDirection(");
@@ -23,10 +23,10 @@ describe("gem shader optics", () => {
 
   test("reduces background transmission through deeper facets", () => {
     expect(gemShader).toContain(
-      "const SHALLOW_BACKGROUND_TRANSMISSION: f32 = 0.58;",
+      "const SHALLOW_BACKGROUND_TRANSMISSION: f32 = 0.46;",
     );
     expect(gemShader).toContain(
-      "const DEEP_BACKGROUND_TRANSMISSION: f32 = 0.18;",
+      "const DEEP_BACKGROUND_TRANSMISSION: f32 = 0.1;",
     );
     expect(gemShader).toContain(
       "refractedBackground * transmissionTint * backgroundTransmission",

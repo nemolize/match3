@@ -40,9 +40,14 @@ const expectMobileLayoutToFit = async (page) => {
 const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
-const expectedOpticalSignature = [
-  -34.4, 0.8, -6, -22.3, 16.6, -6, -23.9, -18.3, -47.7, -1.6, -21, -34.4, 3.4,
-  -14.8, -33.1, -35.4, -39.9, -1.9, -15.3, -34.3, 1.5, -12.5, -33.3, -28.8,
+const expectedMaterialSignature = [
+  -19.6, 15, 7.5, 1.8, 38.5, 6.6, -10.2, 4.4, -32.1, 13.3, -5, -9.2, 26.1, -0.5,
+  -18.4, -11.1, -27.2, 10.8, -3.3, -13, 21, -1.5, -20.9, -8.8,
+];
+
+const expectedFacetSignature = [
+  1.3, 1.14, 1.4, 1.37, 1.36, 1.41, 1.38, 1.4, -1.13, 0.15, -0.86, -0.38, -0.33,
+  -0.56, -0.42, -0.87, -0.18, -1.29, -0.55, -0.99, -1.03, -0.84, -0.96, -0.53,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -233,8 +238,33 @@ test("renders distinguishable faceted optical gems over the water", async ({
         }
       }
 
+      const materialSignature = signatureSums.map(
+        (sum, index) => Math.round((sum / signatureCounts[index]) * 10) / 10,
+      );
+      const facetSignature = materialSignature.map((value, index) => {
+        const column = index % signatureColumns;
+        const columnValues = Array.from(
+          { length: signatureRows },
+          (_, row) => materialSignature[row * signatureColumns + column] ?? 0,
+        );
+        const columnMean =
+          columnValues.reduce((sum, entry) => sum + entry, 0) / signatureRows;
+        const columnScale = Math.sqrt(
+          columnValues.reduce(
+            (sum, entry) => sum + (entry - columnMean) ** 2,
+            0,
+          ) / signatureRows,
+        );
+        return (
+          Math.round(
+            ((value - columnMean) / Math.max(columnScale, 0.1)) * 100,
+          ) / 100
+        );
+      });
+
       return {
         changedPixels,
+        facetSignature,
         gemColorDeltas: gemColorSums.map((sum, index) =>
           sum.map(
             (channel) =>
@@ -242,9 +272,7 @@ test("renders distinguishable faceted optical gems over the water", async ({
           ),
         ),
         meanChangedChannelDelta: channelDelta / changedPixels,
-        opticalSignature: signatureSums.map(
-          (sum, index) => Math.round((sum / signatureCounts[index]) * 10) / 10,
-        ),
+        materialSignature,
       };
     },
     { empty: emptyCapture, optical: opticalCapture },
@@ -269,13 +297,19 @@ test("renders distinguishable faceted optical gems over the water", async ({
       expect(distance).toBeGreaterThan(40);
     }
   }
-  expect(difference.opticalSignature).toHaveLength(
-    expectedOpticalSignature.length,
+  expect(difference.materialSignature).toHaveLength(
+    expectedMaterialSignature.length,
   );
-  difference.opticalSignature.forEach((value, index) => {
+  difference.materialSignature.forEach((value, index) => {
     expect(
-      Math.abs(value - (expectedOpticalSignature[index] ?? Number.NaN)),
+      Math.abs(value - (expectedMaterialSignature[index] ?? Number.NaN)),
     ).toBeLessThanOrEqual(2);
+  });
+  expect(difference.facetSignature).toHaveLength(expectedFacetSignature.length);
+  difference.facetSignature.forEach((value, index) => {
+    expect(
+      Math.abs(value - (expectedFacetSignature[index] ?? Number.NaN)),
+    ).toBeLessThanOrEqual(0.75);
   });
 });
 

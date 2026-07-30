@@ -15,6 +15,19 @@ struct Frame {
 }
 `;
 
+const gemColorFunction = /* wgsl */ `
+fn gemColor(gemType: i32) -> vec3f {
+  switch gemType {
+    case 0: { return vec3f(1.0, 0.12, 0.34); }
+    case 1: { return vec3f(0.12, 0.84, 1.0); }
+    case 2: { return vec3f(0.08, 0.82, 0.34); }
+    case 3: { return vec3f(1.0, 0.86, 0.14); }
+    case 4: { return vec3f(0.78, 0.3, 1.0); }
+    default: { return vec3f(1.0, 0.52, 0.12); }
+  }
+}
+`;
+
 export const backgroundShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -106,6 +119,13 @@ const TABLE_MINOR_WEIGHT: f32 = 0.22;
 const TABLE_RADIUS: f32 = 0.5;
 const CORNER_FACET_WIDTH: f32 = 0.16;
 const GIRDLE_START: f32 = 0.86;
+const FACET_AMBIENT_LIGHT: f32 = 0.74;
+const FACET_DIRECTIONAL_LIGHT: f32 = 0.26;
+const TRANSMISSION_NEUTRAL_TINT: f32 = 0.68;
+const TRANSMISSION_GEM_TINT: f32 = 0.72;
+const BACKGROUND_TRANSMISSION: f32 = 0.58;
+const GEM_BODY_LIGHT: f32 = 0.42;
+const GEM_EDGE_LIGHT: f32 = 0.07;
 
 struct Output {
   @builtin(position) position: vec4f,
@@ -162,16 +182,7 @@ fn ease(progress: f32, mode: f32) -> f32 {
   return output;
 }
 
-fn gemColor(gemType: i32) -> vec3f {
-  switch gemType {
-    case 0: { return vec3f(0.78, 0.05, 0.23); }
-    case 1: { return vec3f(0.08, 0.73, 0.9); }
-    case 2: { return vec3f(0.04, 0.62, 0.25); }
-    case 3: { return vec3f(0.93, 0.72, 0.08); }
-    case 4: { return vec3f(0.58, 0.18, 0.75); }
-    default: { return vec3f(0.9, 0.4, 0.08); }
-  }
-}
+${gemColorFunction}
 
 fn sampleRefraction(screenUv: vec2f, surfaceNormal: vec3f) -> vec3f {
   let incidentDirection = vec3f(0.0, 0.0, -1.0);
@@ -275,11 +286,17 @@ fn gemSurfaceNormal(local: vec2f) -> vec3f {
   let gem = gemColor(i32(input.gemType));
   let radial = length(input.local);
   let keyLight = normalize(vec3f(-0.48, -0.58, 1.0));
-  let facetLight = 0.68 + 0.32 * max(0.0, dot(surfaceNormal, keyLight));
-  let transmissionTint = mix(vec3f(0.62), gem, 0.7);
+  let facetLight =
+    FACET_AMBIENT_LIGHT +
+    FACET_DIRECTIONAL_LIGHT * max(0.0, dot(surfaceNormal, keyLight));
+  let transmissionTint = mix(
+    vec3f(TRANSMISSION_NEUTRAL_TINT),
+    gem,
+    TRANSMISSION_GEM_TINT
+  );
   let transmission =
-    refractedBackground * transmissionTint * 0.58 +
-    gem * facetLight * (0.34 + radial * 0.06);
+    refractedBackground * transmissionTint * BACKGROUND_TRANSMISSION +
+    gem * facetLight * (GEM_BODY_LIGHT + radial * GEM_EDGE_LIGHT);
   let fresnel = fresnelSchlick(
     clamp(dot(viewDirection, surfaceNormal), 0.0, 1.0),
     0.036
@@ -368,16 +385,7 @@ struct Output {
   return output;
 }
 
-fn gemColor(gemType: i32) -> vec3f {
-  switch gemType {
-    case 0: { return vec3f(0.95, 0.12, 0.34); }
-    case 1: { return vec3f(0.18, 0.83, 1.0); }
-    case 2: { return vec3f(0.1, 0.78, 0.34); }
-    case 3: { return vec3f(1.0, 0.82, 0.18); }
-    case 4: { return vec3f(0.73, 0.31, 0.93); }
-    default: { return vec3f(1.0, 0.52, 0.14); }
-  }
-}
+${gemColorFunction}
 
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   return vec4f(gemColor(i32(input.gemType)), input.alpha);

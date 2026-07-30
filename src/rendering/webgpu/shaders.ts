@@ -94,12 +94,20 @@ ${frameUniformStruct}
 ${gemInstanceStruct}
 
 @group(0) @binding(1) var<storage, read> instances: array<GemInstance>;
+@group(0) @binding(2) var backgroundSampler: sampler;
+@group(0) @binding(3) var backgroundTexture: texture_2d<f32>;
+
+const GEM_IOR: f32 = 1.47;
+const REFRACTION_UV_SCALE: f32 = 0.045;
+const REFLECTION_UV_SCALE: f32 = 0.06;
+const GEM_SURFACE_ALPHA: f32 = 0.72;
 
 struct Output {
   @builtin(position) position: vec4f,
   @location(0) local: vec2f,
   @location(1) @interpolate(flat) gemType: f32,
   @location(2) @interpolate(flat) selected: f32,
+  @location(3) screenUv: vec2f,
 }
 
 fn ease(progress: f32, mode: f32) -> f32 {
@@ -145,6 +153,7 @@ fn ease(progress: f32, mode: f32) -> f32 {
   output.local = local;
   output.gemType = instance.gemType;
   output.selected = instance.selected;
+  output.screenUv = pixel / frame.canvas;
   return output;
 }
 
@@ -159,15 +168,91 @@ fn gemColor(gemType: i32) -> vec3f {
   }
 }
 
+fn sampleRefraction(screenUv: vec2f, surfaceNormal: vec3f) -> vec3f {
+  let incidentDirection = vec3f(0.0, 0.0, -1.0);
+  let direction = refract(
+    incidentDirection,
+    surfaceNormal,
+    1.0 / GEM_IOR
+  );
+  let refractedUv = clamp(
+    screenUv + direction.xy * REFRACTION_UV_SCALE,
+    vec2f(0.002),
+    vec2f(0.998)
+  );
+  return textureSample(
+    backgroundTexture,
+    backgroundSampler,
+    refractedUv
+  ).rgb;
+}
+
+fn fresnelSchlick(cosine: f32, baseReflectance: f32) -> f32 {
+  let grazing = 1.0 - cosine;
+  let grazingSquared = grazing * grazing;
+  return baseReflectance +
+    (1.0 - baseReflectance) *
+      grazingSquared *
+      grazingSquared *
+      grazing;
+}
+
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
   let p = abs(input.local);
   let silhouette = max(p.x, p.y) + min(p.x, p.y) * 0.14;
   if (silhouette > 1.0) { discard; }
-  let gloss = pow(max(0.0, 1.0 - distance(input.local, vec2f(-0.35, -0.45))), 4.0);
-  let facet = 0.82 + 0.18 * cos(atan2(input.local.y, input.local.x) * 8.0);
-  var color = gemColor(i32(input.gemType)) * facet + vec3f(gloss * 0.7);
+
+  let facetWave =
+    1.0 - 2.0 * abs(abs(input.local.x) - abs(input.local.y));
+  let normalXY = input.local * (0.52 + facetWave * 0.06);
+  let surfaceNormal = normalize(vec3f(
+    normalXY,
+    sqrt(max(0.18, 1.0 - dot(normalXY, normalXY)))
+  ));
+  let viewDirection = vec3f(0.0, 0.0, 1.0);
+  let incidentDirection = -viewDirection;
+  let refractedBackground = sampleRefraction(
+    input.screenUv,
+    surfaceNormal
+  );
+  let uvMinimum = vec2f(0.002);
+  let uvMaximum = vec2f(0.998);
+
+  let reflectionDirection = reflect(incidentDirection, surfaceNormal);
+  let reflectionUv = clamp(
+    input.screenUv + reflectionDirection.xy * REFLECTION_UV_SCALE,
+    uvMinimum,
+    uvMaximum
+  );
+  let reflectedBackground = textureSample(
+    backgroundTexture,
+    backgroundSampler,
+    reflectionUv
+  ).rgb;
+  let gem = gemColor(i32(input.gemType));
+  let radial = length(input.local);
+  let transmissionTint = mix(vec3f(0.94), gem, 0.46 + radial * 0.12);
+  let transmission = refractedBackground * transmissionTint;
+  let fresnel = fresnelSchlick(
+    clamp(dot(viewDirection, surfaceNormal), 0.0, 1.0),
+    0.036
+  );
+  let reflection = mix(
+    reflectedBackground,
+    vec3f(0.72, 0.94, 1.0),
+    0.28 + max(0.0, -reflectionDirection.y) * 0.28
+  );
+  var color = mix(transmission, reflection, clamp(fresnel * 1.9, 0.08, 0.72));
+  let keyLight = normalize(vec3f(-0.48, -0.58, 1.0));
+  let glossBase = max(0.0, dot(surfaceNormal, keyLight));
+  let glossSquared = glossBase * glossBase;
+  let glossFourth = glossSquared * glossSquared;
+  let glossEighth = glossFourth * glossFourth;
+  let gloss = glossEighth * glossEighth * glossEighth * glossFourth;
+  color += vec3f(gloss * 0.7);
+  color += gem * (0.05 + max(0.0, facetWave) * 0.035);
   if (input.selected > 0.5 && silhouette > 0.82) { color = vec3f(1.0); }
-  return vec4f(color, 0.88);
+  return vec4f(color, GEM_SURFACE_ALPHA);
 }
 `;
 

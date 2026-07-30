@@ -37,6 +37,14 @@ const expectMobileLayoutToFit = async (page) => {
   }
 };
 
+const captureCanvasFrame = async (canvas) =>
+  (await canvas.screenshot()).toString("base64");
+
+const expectedOpticalSignature = [
+  9.1, -8, -8.2, 3.4, -2, -1.1, -1.2, -9.4, -7, 16.4, 0.6, -2.1, -4.1, -4.1,
+  -1.9, 16.4, -5.6, -11.8, 11.4, 0.3, -0.6, 12.9, 0.9, -2.2,
+];
+
 test("should load the match3 game page", async ({ page }) => {
   await page.goto("/");
 
@@ -100,6 +108,118 @@ test("renders deterministic refill state through WebGPU", async ({ page }) => {
   );
   expect(timings?.supported).toBe(true);
   expect(timings?.passes?.gemRefraction?.sampleCount).toBe(1);
+});
+
+test("renders translucent optical gems over the water", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/e2e-tests/fixtures/drop.html");
+  const canvas = await expectWebGpuReady(page);
+  const opticalCapture = await captureCanvasFrame(canvas);
+
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const emptyCapture = await captureCanvasFrame(canvas);
+
+  const difference = await page.evaluate(
+    async (captures) => {
+      const decode = async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const surface = document.createElement("canvas");
+        surface.width = image.naturalWidth;
+        surface.height = image.naturalHeight;
+        const context = surface.getContext("2d");
+        if (!context) throw new Error("A 2D sampling context is unavailable.");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, surface.width, surface.height);
+      };
+      const optical = await decode(captures.optical);
+      const empty = await decode(captures.empty);
+      if (optical.data.length !== empty.data.length) {
+        throw new Error("Comparable canvas captures are unavailable.");
+      }
+
+      let changedPixels = 0;
+      let channelDelta = 0;
+      let minimumX = optical.width;
+      let minimumY = optical.height;
+      let maximumX = 0;
+      let maximumY = 0;
+      for (let index = 0; index < optical.data.length; index += 4) {
+        const delta =
+          Math.abs((optical.data[index] ?? 0) - (empty.data[index] ?? 0)) +
+          Math.abs(
+            (optical.data[index + 1] ?? 0) - (empty.data[index + 1] ?? 0),
+          ) +
+          Math.abs(
+            (optical.data[index + 2] ?? 0) - (empty.data[index + 2] ?? 0),
+          );
+        if (delta <= 6) continue;
+        changedPixels += 1;
+        channelDelta += delta / 3;
+        const pixelIndex = index / 4;
+        const x = pixelIndex % optical.width;
+        const y = Math.floor(pixelIndex / optical.width);
+        minimumX = Math.min(minimumX, x);
+        minimumY = Math.min(minimumY, y);
+        maximumX = Math.max(maximumX, x);
+        maximumY = Math.max(maximumY, y);
+      }
+
+      const signatureColumns = 3;
+      const signatureRows = 8;
+      const signatureSums = Array(signatureColumns * signatureRows).fill(0);
+      const signatureCounts = Array(signatureColumns * signatureRows).fill(0);
+      const opticalWidth = maximumX - minimumX + 1;
+      const opticalHeight = maximumY - minimumY + 1;
+      for (let y = minimumY; y <= maximumY; y += 1) {
+        for (let x = minimumX; x <= maximumX; x += 1) {
+          const pixelOffset = (y * optical.width + x) * 4;
+          const opticalLuminance =
+            (optical.data[pixelOffset] ?? 0) * 0.2126 +
+            (optical.data[pixelOffset + 1] ?? 0) * 0.7152 +
+            (optical.data[pixelOffset + 2] ?? 0) * 0.0722;
+          const emptyLuminance =
+            (empty.data[pixelOffset] ?? 0) * 0.2126 +
+            (empty.data[pixelOffset + 1] ?? 0) * 0.7152 +
+            (empty.data[pixelOffset + 2] ?? 0) * 0.0722;
+          const column = Math.min(
+            signatureColumns - 1,
+            Math.floor(((x - minimumX) / opticalWidth) * signatureColumns),
+          );
+          const row = Math.min(
+            signatureRows - 1,
+            Math.floor(((y - minimumY) / opticalHeight) * signatureRows),
+          );
+          const signatureIndex = row * signatureColumns + column;
+          signatureSums[signatureIndex] += opticalLuminance - emptyLuminance;
+          signatureCounts[signatureIndex] += 1;
+        }
+      }
+
+      return {
+        changedPixels,
+        meanChangedChannelDelta: channelDelta / changedPixels,
+        opticalSignature: signatureSums.map(
+          (sum, index) => Math.round((sum / signatureCounts[index]) * 10) / 10,
+        ),
+      };
+    },
+    { empty: emptyCapture, optical: opticalCapture },
+  );
+
+  expect(difference.changedPixels).toBeGreaterThan(1_000);
+  expect(difference.meanChangedChannelDelta).toBeGreaterThan(8);
+  expect(difference.meanChangedChannelDelta).toBeLessThan(48);
+  expect(difference.opticalSignature).toHaveLength(
+    expectedOpticalSignature.length,
+  );
+  difference.opticalSignature.forEach((value, index) => {
+    expect(
+      Math.abs(value - (expectedOpticalSignature[index] ?? Number.NaN)),
+    ).toBeLessThanOrEqual(2);
+  });
 });
 
 test("keeps semantic gems available while WebGPU animates a drop", async ({

@@ -127,11 +127,10 @@ const REFRACTION_UV_SCALE: f32 = 0.045;
 const REFLECTION_UV_SCALE: f32 = 0.06;
 const SHALLOW_GEM_ALPHA: f32 = ${gemMaterialParameters.shallowAlpha};
 const DEEP_GEM_ALPHA: f32 = ${gemMaterialParameters.deepAlpha};
-const SILHOUETTE_MINOR_WEIGHT: f32 = 0.14;
-const TABLE_MINOR_WEIGHT: f32 = 0.22;
-const TABLE_RADIUS: f32 = 0.5;
-const CORNER_FACET_WIDTH: f32 = 0.16;
-const GIRDLE_START: f32 = 0.86;
+const OUTER_CORNER_CUT: f32 = 0.18;
+const TABLE_CORNER_CUT: f32 = 0.28;
+const TABLE_RADIUS: f32 = 0.68;
+const GIRDLE_START: f32 = 0.9;
 const FACET_AMBIENT_LIGHT: f32 = 0.74;
 const FACET_DIRECTIONAL_LIGHT: f32 = 0.26;
 const TRANSMISSION_NEUTRAL_TINT: f32 = 0.68;
@@ -231,41 +230,63 @@ fn fresnelSchlick(cosine: f32, baseReflectance: f32) -> f32 {
       grazing;
 }
 
+fn chamferAxis(p: vec2f) -> f32 {
+  return max(p.x, p.y);
+}
+
+fn chamferCorner(p: vec2f, cornerCut: f32) -> f32 {
+  return (p.x + p.y) / (2.0 - cornerCut);
+}
+
+fn chamferedSquare(p: vec2f, cornerCut: f32) -> f32 {
+  return max(chamferAxis(p), chamferCorner(p, cornerCut));
+}
+
+fn chamferBoundary(p: vec2f, cornerCut: f32) -> f32 {
+  return abs(chamferCorner(p, cornerCut) - chamferAxis(p));
+}
+
+fn surfaceCornerCut(p: vec2f) -> f32 {
+  return mix(
+    TABLE_CORNER_CUT,
+    OUTER_CORNER_CUT,
+    smoothstep(TABLE_RADIUS, GIRDLE_START, gemSilhouette(p))
+  );
+}
+
 fn gemSilhouette(p: vec2f) -> f32 {
-  return max(p.x, p.y) + min(p.x, p.y) * SILHOUETTE_MINOR_WEIGHT;
+  return chamferedSquare(p, OUTER_CORNER_CUT);
 }
 
 fn gemTableShape(p: vec2f) -> f32 {
-  return max(p.x, p.y) + min(p.x, p.y) * TABLE_MINOR_WEIGHT;
+  return chamferedSquare(p, TABLE_CORNER_CUT);
 }
 
 fn gemSurfaceNormal(local: vec2f) -> vec3f {
   let p = abs(local);
   let tableShape = gemTableShape(p);
   let silhouette = gemSilhouette(p);
+  let axisShape = chamferAxis(p);
+  let surfaceCorner = chamferCorner(p, surfaceCornerCut(p));
   var normalXY = vec2f(-0.035, -0.055);
 
   if (tableShape > TABLE_RADIUS) {
-    if (abs(p.x - p.y) < CORNER_FACET_WIDTH) {
-      normalXY = vec2f(sign(local.x) * 0.54, sign(local.y) * 0.54);
+    if (surfaceCorner > axisShape) {
+      normalXY = normalize(vec2f(sign(local.x), sign(local.y))) * 0.72;
     } else if (p.x > p.y) {
-      normalXY = vec2f(sign(local.x) * 0.68, sign(local.y) * 0.16);
+      normalXY = vec2f(sign(local.x) * 0.68, 0.0);
     } else {
-      normalXY = vec2f(sign(local.x) * 0.16, sign(local.y) * 0.68);
+      normalXY = vec2f(0.0, sign(local.y) * 0.68);
     }
   }
 
   if (silhouette > GIRDLE_START) {
-    if (p.x > p.y) {
-      normalXY = normalize(vec2f(
-        sign(local.x),
-        sign(local.y) * SILHOUETTE_MINOR_WEIGHT
-      )) * 0.78;
+    if (surfaceCorner > axisShape) {
+      normalXY = normalize(vec2f(sign(local.x), sign(local.y))) * 0.78;
+    } else if (p.x > p.y) {
+      normalXY = vec2f(sign(local.x) * 0.78, 0.0);
     } else {
-      normalXY = normalize(vec2f(
-        sign(local.x) * SILHOUETTE_MINOR_WEIGHT,
-        sign(local.y)
-      )) * 0.78;
+      normalXY = vec2f(0.0, sign(local.y) * 0.78);
     }
   }
 
@@ -364,17 +385,21 @@ fn gemOpticalDepth(local: vec2f, refractionDirection: vec3f) -> f32 {
   let tableShape = gemTableShape(p);
   let tableRidge =
     1.0 - smoothstep(0.0, 0.035, abs(tableShape - TABLE_RADIUS));
-  let crownRidge =
+  let cornerRidge =
     (1.0 - smoothstep(
       0.0,
       0.035,
-      abs(abs(p.x - p.y) - CORNER_FACET_WIDTH)
+      chamferBoundary(p, surfaceCornerCut(p))
     )) *
     smoothstep(TABLE_RADIUS - 0.02, TABLE_RADIUS + 0.08, tableShape);
   let girdleRidge =
     1.0 - smoothstep(0.0, 0.025, abs(silhouette - GIRDLE_START));
   unattenuatedHighlight += mix(gem, vec3f(1.0), 0.55) *
-    (tableRidge * 0.12 + crownRidge * 0.045 + girdleRidge * 0.05);
+    (
+      tableRidge * 0.12 +
+      cornerRidge * 0.045 +
+      girdleRidge * 0.05
+    );
   if (input.selected > 0.5 && silhouette > 0.82) {
     return vec4f(1.0);
   }

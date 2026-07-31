@@ -9,6 +9,9 @@ describe("background shader", () => {
       "fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f",
     );
     expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
+    expect(backgroundShader).toContain("const WATER_FEATURE_SCALE: f32 = 2.0;");
+    expect(backgroundShader).toContain("0.38 * WATER_FEATURE_SCALE");
+    expect(backgroundShader).toContain("0.012 * WATER_FEATURE_SCALE");
     expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
     expect(backgroundShader).toContain("let refractionDirection = refract(");
     expect(backgroundShader).toContain(
@@ -32,7 +35,10 @@ describe("background shader", () => {
       "return sky + vec3f(7.0, 6.4, 5.2) * sun;",
     );
     expect(backgroundShader).toContain(
-      "let light = caustic(refractedUv, time * 1.8)",
+      "(refractedUv - vec2f(0.5)) / WATER_FEATURE_SCALE",
+    );
+    expect(backgroundShader).toContain(
+      "let light = caustic(causticUv, time * 1.8)",
     );
   });
 });

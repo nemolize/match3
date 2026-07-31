@@ -49,6 +49,7 @@ ${frameUniformStruct}
 const AIR_IOR: f32 = 1.000293;
 const WATER_IOR: f32 = 1.333;
 const TAU: f32 = 6.28318530718;
+const WATER_FEATURE_SCALE: f32 = 2.0;
 const WATER_ABSORPTION: vec3f = vec3f(2.4, 0.55, 0.18);
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
@@ -86,24 +87,24 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
     directionalWaveGradient(
       uv,
       normalize(vec2f(0.82, 0.57)),
-      0.38,
-      0.012,
+      0.38 * WATER_FEATURE_SCALE,
+      0.012 * WATER_FEATURE_SCALE,
       0.85,
       time
     ) +
     directionalWaveGradient(
       uv,
       normalize(vec2f(-0.36, 0.93)),
-      0.23,
-      0.006,
+      0.23 * WATER_FEATURE_SCALE,
+      0.006 * WATER_FEATURE_SCALE,
       -1.15,
       time
     ) +
     directionalWaveGradient(
       uv,
       normalize(vec2f(0.96, -0.28)),
-      0.14,
-      0.0025,
+      0.14 * WATER_FEATURE_SCALE,
+      0.0025 * WATER_FEATURE_SCALE,
       1.65,
       time
     );
@@ -168,9 +169,13 @@ fn sampleSky(direction: vec3f) -> vec3f {
   let inscattering =
     vec3f(0.015, 0.22, 0.3) * (vec3f(1.0) - transmittance);
   var transmission = sand * transmittance + inscattering;
-  let rays = pow(max(0.0, sin(uv.x * 18.0 + time * 0.35)), 14.0) *
-    (1.0 - uv.y) * 0.09;
-  let light = caustic(refractedUv, time * 1.8) * 0.34;
+  let rays = pow(
+    max(0.0, sin(uv.x * (18.0 / WATER_FEATURE_SCALE) + time * 0.35)),
+    14.0
+  ) * (1.0 - uv.y) * 0.09;
+  let causticUv =
+    vec2f(0.5) + (refractedUv - vec2f(0.5)) / WATER_FEATURE_SCALE;
+  let light = caustic(causticUv, time * 1.8) * 0.34;
   transmission +=
     vec3f(rays + light, rays + light, (rays + light) * 0.72) *
     transmittance;

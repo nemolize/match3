@@ -41,13 +41,13 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -59.1, -5.1, -4.1, -30, 33.4, -10.6, -25.9, -20.8, -66.9, -1.9, -28.2, -41.6,
-  22.5, -17.7, -43.1, -43.8, -62.4, 1.1, -22.8, -39.3, 21.6, -14, -49.1, -28.4,
+  -63.7, -3.8, -6, -28.9, 22.1, -17.4, -27.6, -16.7, -71.5, -1.9, -23.8, -45, 5,
+  -27.8, -49, -44, -66.9, -0.1, -19.5, -42.1, 7.8, -20, -53.7, -36,
 ];
 
 const expectedFacetSignature = [
-  1.12, -1.39, 1.4, 1.4, 1.3, 1.41, 1.33, 1.33, -1.31, 0.45, -0.9, -0.86, -0.18,
-  -0.79, -0.24, -1.08, 0.19, 0.93, -0.5, -0.55, -1.13, -0.62, -1.09, -0.24,
+  1.15, -1.24, 1.38, 1.39, 1.4, 0.98, 1.39, 1.36, -1.29, 0.02, -0.97, -0.9,
+  -0.89, -1.37, -0.49, -1.03, 0.15, 1.21, -0.4, -0.49, -0.51, 0.39, -0.9, -0.33,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -316,6 +316,53 @@ test("renders distinguishable faceted optical gems over submerged sand", async (
       Math.abs(value - (expectedFacetSignature[index] ?? Number.NaN)),
     ).toBeLessThanOrEqual(0.75);
   });
+});
+
+test("animates water-surface reflection and refraction over sand", async ({
+  page,
+}) => {
+  await page.goto("/e2e-tests/fixtures/optics.html");
+  const canvas = await expectWebGpuReady(page);
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const firstCapture = await captureCanvasFrame(canvas);
+  await page.waitForTimeout(350);
+  const secondCapture = await captureCanvasFrame(canvas);
+
+  const changedPixels = await page.evaluate(
+    async ({ first, second }) => {
+      const decode = async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const surface = document.createElement("canvas");
+        surface.width = image.naturalWidth;
+        surface.height = image.naturalHeight;
+        const context = surface.getContext("2d");
+        if (!context) throw new Error("A 2D sampling context is unavailable.");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, surface.width, surface.height).data;
+      };
+      const firstPixels = await decode(first);
+      const secondPixels = await decode(second);
+      let changed = 0;
+      for (let index = 0; index < firstPixels.length; index += 4) {
+        const delta =
+          Math.abs((firstPixels[index] ?? 0) - (secondPixels[index] ?? 0)) +
+          Math.abs(
+            (firstPixels[index + 1] ?? 0) - (secondPixels[index + 1] ?? 0),
+          ) +
+          Math.abs(
+            (firstPixels[index + 2] ?? 0) - (secondPixels[index + 2] ?? 0),
+          );
+        if (delta > 12) changed += 1;
+      }
+      return changed;
+    },
+    { first: firstCapture, second: secondCapture },
+  );
+
+  expect(changedPixels).toBeGreaterThan(2_000);
 });
 
 test("keeps semantic gems available while WebGPU animates a drop", async ({

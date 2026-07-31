@@ -3,17 +3,36 @@ import { describe, expect, test } from "vitest";
 import { backgroundShader, gemShader } from "./shaders";
 
 describe("background shader", () => {
-  test("layers animated shallow water over the sand texture", () => {
+  test("refracts the sand through an animated water surface", () => {
     expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
     expect(backgroundShader).toContain(
-      "textureSample(sandTexture, sandSampler, sandUv)",
+      "fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f",
     );
-    expect(backgroundShader).toContain("let rippleOffset = vec2f(");
+    expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
+    expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
+    expect(backgroundShader).toContain("let refractionDirection = refract(");
     expect(backgroundShader).toContain(
-      "var color = mix(sand, water, waterOpacity);",
+      "uv + refractionDirection.xy * opticalPathLength * 0.65",
+    );
+    expect(backgroundShader).toContain("sandSampler,\n    refractedUv");
+  });
+
+  test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
+    expect(backgroundShader).toContain("fn fresnelDielectric(");
+    expect(backgroundShader).toContain(
+      "let reflectionDirection = reflect(incidentDirection, surfaceNormal);",
     );
     expect(backgroundShader).toContain(
-      "caustic(uv + rippleOffset, time * 1.8)",
+      "let transmittance = exp(-WATER_ABSORPTION * opticalPathLength);",
+    );
+    expect(backgroundShader).toContain(
+      "var color = mix(transmission, reflection, fresnel);",
+    );
+    expect(backgroundShader).toContain(
+      "return sky + vec3f(7.0, 6.4, 5.2) * sun;",
+    );
+    expect(backgroundShader).toContain(
+      "let light = caustic(refractedUv, time * 1.8)",
     );
   });
 });

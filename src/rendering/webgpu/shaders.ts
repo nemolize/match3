@@ -46,6 +46,11 @@ ${frameUniformStruct}
 @group(0) @binding(1) var sandSampler: sampler;
 @group(0) @binding(2) var sandTexture: texture_2d<f32>;
 
+const AIR_IOR: f32 = 1.000293;
+const WATER_IOR: f32 = 1.333;
+const TAU: f32 = 6.28318530718;
+const WATER_ABSORPTION: vec3f = vec3f(2.4, 0.55, 0.18);
+
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
   let positions = array<vec2f, 3>(
     vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)
@@ -63,27 +68,121 @@ fn hash(seed: f32) -> f32 {
   return fract(sin(seed * 12.9898) * 43758.5453);
 }
 
+fn directionalWaveGradient(
+  uv: vec2f,
+  direction: vec2f,
+  wavelength: f32,
+  amplitude: f32,
+  speed: f32,
+  time: f32
+) -> vec2f {
+  let waveNumber = TAU / wavelength;
+  let phase = dot(uv, direction) * waveNumber + time * speed;
+  return direction * (amplitude * waveNumber * cos(phase));
+}
+
+fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
+  let gradient =
+    directionalWaveGradient(
+      uv,
+      normalize(vec2f(0.82, 0.57)),
+      0.38,
+      0.012,
+      0.85,
+      time
+    ) +
+    directionalWaveGradient(
+      uv,
+      normalize(vec2f(-0.36, 0.93)),
+      0.23,
+      0.006,
+      -1.15,
+      time
+    ) +
+    directionalWaveGradient(
+      uv,
+      normalize(vec2f(0.96, -0.28)),
+      0.14,
+      0.0025,
+      1.65,
+      time
+    );
+  return normalize(vec3f(-gradient, 1.0));
+}
+
+fn fresnelDielectric(cosineIncident: f32, incidentIor: f32, transmittedIor: f32) -> f32 {
+  let clampedCosine = clamp(cosineIncident, 0.0, 1.0);
+  let eta = incidentIor / transmittedIor;
+  let sineTransmittedSquared =
+    eta * eta * max(0.0, 1.0 - clampedCosine * clampedCosine);
+  if (sineTransmittedSquared >= 1.0) {
+    return 1.0;
+  }
+  let cosineTransmitted = sqrt(1.0 - sineTransmittedSquared);
+  let parallel =
+    (transmittedIor * clampedCosine - incidentIor * cosineTransmitted) /
+    (transmittedIor * clampedCosine + incidentIor * cosineTransmitted);
+  let perpendicular =
+    (incidentIor * clampedCosine - transmittedIor * cosineTransmitted) /
+    (incidentIor * clampedCosine + transmittedIor * cosineTransmitted);
+  return 0.5 * (parallel * parallel + perpendicular * perpendicular);
+}
+
+fn sampleSky(direction: vec3f) -> vec3f {
+  let upness = clamp(direction.z, 0.0, 1.0);
+  let horizon = vec3f(0.58, 0.8, 0.88);
+  let zenith = vec3f(0.1, 0.38, 0.68);
+  let sky = mix(horizon, zenith, smoothstep(0.0, 1.0, upness));
+  let sunDirection = normalize(vec3f(-0.25, -0.3, 0.92));
+  let sun = pow(max(0.0, dot(direction, sunDirection)), 32.0);
+  return sky + vec3f(7.0, 6.4, 5.2) * sun;
+}
+
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / (frame.canvas * frame.devicePixelRatio);
   let time = select(frame.waterTimeMs * 0.001, 0.0, frame.reducedMotion > 0.5);
-  let rippleOffset = vec2f(
-    sin(uv.y * 18.0 + time * 0.7) + sin(uv.y * 31.0 - time * 0.45),
-    cos(uv.x * 16.0 - time * 0.6) + sin(uv.x * 27.0 + time * 0.4)
-  ) * 0.0025;
-  let sandUv = clamp(uv + rippleOffset, vec2f(0.0), vec2f(1.0));
-  let sampledSand = textureSample(sandTexture, sandSampler, sandUv).rgb;
-  let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
+  let surfaceNormal = waterSurfaceNormal(uv, time);
+  let viewDirection = vec3f(0.0, 0.0, 1.0);
+  let incidentDirection = -viewDirection;
+  let refractionDirection = refract(
+    incidentDirection,
+    surfaceNormal,
+    AIR_IOR / WATER_IOR
+  );
   let depthFactor = smoothstep(0.0, 1.0, uv.y);
-  let shallowWater = vec3f(0.08, 0.68, 0.74);
-  let deepWater = vec3f(0.025, 0.25, 0.43);
-  let water = mix(shallowWater, deepWater, depthFactor);
-  let surfaceWave = sin(uv.x * 9.0 + uv.y * 7.0 + time * 0.55) * 0.025;
-  let waterOpacity = 0.28 + depthFactor * 0.14 + surfaceWave;
-  var color = mix(sand, water, waterOpacity);
+  let waterDepth = mix(0.08, 0.18, depthFactor);
+  let opticalPathLength =
+    waterDepth / max(0.2, abs(refractionDirection.z));
+  let refractedUv = clamp(
+    uv + refractionDirection.xy * opticalPathLength * 0.65,
+    vec2f(0.002),
+    vec2f(0.998)
+  );
+  let sampledSand = textureSample(
+    sandTexture,
+    sandSampler,
+    refractedUv
+  ).rgb;
+  let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
+  let transmittance = exp(-WATER_ABSORPTION * opticalPathLength);
+  let inscattering =
+    vec3f(0.015, 0.22, 0.3) * (vec3f(1.0) - transmittance);
+  var transmission = sand * transmittance + inscattering;
   let rays = pow(max(0.0, sin(uv.x * 18.0 + time * 0.35)), 14.0) *
     (1.0 - uv.y) * 0.09;
-  let light = caustic(uv + rippleOffset, time * 1.8) * 0.34;
-  color += vec3f(rays + light, rays + light, (rays + light) * 0.72);
+  let light = caustic(refractedUv, time * 1.8) * 0.34;
+  transmission +=
+    vec3f(rays + light, rays + light, (rays + light) * 0.72) *
+    transmittance;
+
+  let reflectionDirection = reflect(incidentDirection, surfaceNormal);
+  let reflection = sampleSky(reflectionDirection);
+  let fresnel = fresnelDielectric(
+    dot(viewDirection, surfaceNormal),
+    AIR_IOR,
+    WATER_IOR
+  );
+  var color = mix(transmission, reflection, fresnel);
   for (var index = 0; index < 18; index += 1) {
     let seed = f32(index);
     let center = vec2f(

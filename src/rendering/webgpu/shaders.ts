@@ -50,6 +50,8 @@ const AIR_IOR: f32 = 1.000293;
 const WATER_IOR: f32 = 1.333;
 const TAU: f32 = 6.28318530718;
 const WATER_FEATURE_SCALE: f32 = 2.0;
+const SAND_FEATURE_SCALE: f32 = 2.0;
+const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
 const WATER_ABSORPTION: vec3f = vec3f(2.4, 0.55, 0.18);
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
@@ -107,6 +109,22 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       0.0025 * WATER_FEATURE_SCALE,
       1.65,
       time
+    ) +
+    directionalWaveGradient(
+      uv,
+      normalize(vec2f(-0.91, 0.41)),
+      0.055,
+      0.0018,
+      2.8,
+      time
+    ) +
+    directionalWaveGradient(
+      uv,
+      normalize(vec2f(0.28, 0.96)),
+      0.032,
+      0.0008,
+      -4.1,
+      time
     );
   return normalize(vec3f(-gradient, 1.0));
 }
@@ -154,15 +172,21 @@ fn sampleSky(direction: vec3f) -> vec3f {
   let waterDepth = mix(0.08, 0.18, depthFactor);
   let opticalPathLength =
     waterDepth / max(0.2, abs(refractionDirection.z));
+  let refractionOffset = refractionDirection.xy * opticalPathLength * 0.85;
   let refractedUv = clamp(
-    uv + refractionDirection.xy * opticalPathLength * 0.65,
+    uv + refractionOffset,
+    vec2f(0.002),
+    vec2f(0.998)
+  );
+  let sandUv = clamp(
+    vec2f(0.5) + (uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset,
     vec2f(0.002),
     vec2f(0.998)
   );
   let sampledSand = textureSample(
     sandTexture,
     sandSampler,
-    refractedUv
+    sandUv
   ).rgb;
   let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
   let transmittance = exp(-WATER_ABSORPTION * opticalPathLength);
@@ -174,7 +198,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     14.0
   ) * (1.0 - uv.y) * 0.09;
   let causticUv =
-    vec2f(0.5) + (refractedUv - vec2f(0.5)) / WATER_FEATURE_SCALE;
+    vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
   let light = caustic(causticUv, time * 1.8) * 0.34;
   transmission +=
     vec3f(rays + light, rays + light, (rays + light) * 0.72) *

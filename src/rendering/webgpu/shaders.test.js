@@ -10,14 +10,23 @@ describe("background shader", () => {
     );
     expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
     expect(backgroundShader).toContain("const WATER_FEATURE_SCALE: f32 = 2.0;");
+    expect(backgroundShader).toContain("const SAND_FEATURE_SCALE: f32 = 2.0;");
+    expect(backgroundShader).toContain(
+      "const CAUSTIC_FEATURE_SCALE: f32 = 0.75;",
+    );
     expect(backgroundShader).toContain("0.38 * WATER_FEATURE_SCALE");
     expect(backgroundShader).toContain("0.012 * WATER_FEATURE_SCALE");
+    expect(backgroundShader).toContain("0.055,");
+    expect(backgroundShader).toContain("0.0018,");
     expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
     expect(backgroundShader).toContain("let refractionDirection = refract(");
     expect(backgroundShader).toContain(
-      "uv + refractionDirection.xy * opticalPathLength * 0.65",
+      "refractionDirection.xy * opticalPathLength * 0.85",
     );
-    expect(backgroundShader).toContain("sandSampler,\n    refractedUv");
+    expect(backgroundShader).toContain(
+      "(uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset",
+    );
+    expect(backgroundShader).toContain("sandSampler,\n    sandUv");
   });
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
@@ -35,7 +44,7 @@ describe("background shader", () => {
       "return sky + vec3f(7.0, 6.4, 5.2) * sun;",
     );
     expect(backgroundShader).toContain(
-      "(refractedUv - vec2f(0.5)) / WATER_FEATURE_SCALE",
+      "(refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE",
     );
     expect(backgroundShader).toContain(
       "let light = caustic(causticUv, time * 1.8)",

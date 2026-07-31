@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+.beach-background {
+  background-color: #6fc8ce;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgb(3 18 30 / 28%) 0%,
+      rgb(3 18 30 / 18%) 45%,
+      rgb(3 18 30 / 48%) 100%
+    ),
+    url("/images/beach-shoreline.webp");
+  background-position: center;
+  background-size: cover;
+}
+
 /* Mobile-specific styles for better touch experience */
 * {
   -webkit-tap-highlight-color: transparent;

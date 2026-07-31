@@ -22,7 +22,9 @@ export const GameHeader = ({
         animate={{ scale: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="mb-1 text-sm font-medium text-gray-300">Score</div>
+        <div className="mb-1 text-sm font-medium text-white/90 drop-shadow-md">
+          Score
+        </div>
         <motion.div
           className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-2xl font-bold text-transparent"
           key={score}
@@ -41,7 +43,9 @@ export const GameHeader = ({
         animate={{ scale: 1 }}
         transition={{ delay: 0.3 }}
       >
-        <div className="mb-1 text-sm font-medium text-gray-300">Level</div>
+        <div className="mb-1 text-sm font-medium text-white/90 drop-shadow-md">
+          Level
+        </div>
         <div className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-2xl font-bold text-transparent text-white">
           {level}
         </div>

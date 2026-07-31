@@ -43,6 +43,8 @@ const gemMaterialParameters = {
 export const backgroundShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var sandSampler: sampler;
+@group(0) @binding(2) var sandTexture: texture_2d<f32>;
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
   let positions = array<vec2f, 3>(
@@ -64,12 +66,23 @@ fn hash(seed: f32) -> f32 {
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / (frame.canvas * frame.devicePixelRatio);
   let time = select(frame.waterTimeMs * 0.001, 0.0, frame.reducedMotion > 0.5);
-  let surface = vec3f(0.08, 0.69, 0.82);
-  let depth = vec3f(0.025, 0.16, 0.34);
-  var color = mix(surface, depth, smoothstep(0.0, 1.0, uv.y));
+  let rippleOffset = vec2f(
+    sin(uv.y * 18.0 + time * 0.7) + sin(uv.y * 31.0 - time * 0.45),
+    cos(uv.x * 16.0 - time * 0.6) + sin(uv.x * 27.0 + time * 0.4)
+  ) * 0.0025;
+  let sandUv = clamp(uv + rippleOffset, vec2f(0.0), vec2f(1.0));
+  let sampledSand = textureSample(sandTexture, sandSampler, sandUv).rgb;
+  let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
+  let depthFactor = smoothstep(0.0, 1.0, uv.y);
+  let shallowWater = vec3f(0.08, 0.68, 0.74);
+  let deepWater = vec3f(0.025, 0.25, 0.43);
+  let water = mix(shallowWater, deepWater, depthFactor);
+  let surfaceWave = sin(uv.x * 9.0 + uv.y * 7.0 + time * 0.55) * 0.025;
+  let waterOpacity = 0.28 + depthFactor * 0.14 + surfaceWave;
+  var color = mix(sand, water, waterOpacity);
   let rays = pow(max(0.0, sin(uv.x * 18.0 + time * 0.35)), 14.0) *
-    (1.0 - uv.y) * 0.14;
-  let light = caustic(uv, time * 1.8) * 0.28;
+    (1.0 - uv.y) * 0.09;
+  let light = caustic(uv + rippleOffset, time * 1.8) * 0.34;
   color += vec3f(rays + light, rays + light, (rays + light) * 0.72);
   for (var index = 0; index < 18; index += 1) {
     let seed = f32(index);

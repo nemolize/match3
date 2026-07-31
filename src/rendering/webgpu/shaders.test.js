@@ -1,6 +1,22 @@
 import { describe, expect, test } from "vitest";
 
-import { gemShader } from "./shaders";
+import { backgroundShader, gemShader } from "./shaders";
+
+describe("background shader", () => {
+  test("layers animated shallow water over the sand texture", () => {
+    expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
+    expect(backgroundShader).toContain(
+      "textureSample(sandTexture, sandSampler, sandUv)",
+    );
+    expect(backgroundShader).toContain("let rippleOffset = vec2f(");
+    expect(backgroundShader).toContain(
+      "var color = mix(sand, water, waterOpacity);",
+    );
+    expect(backgroundShader).toContain(
+      "caustic(uv + rippleOffset, time * 1.8)",
+    );
+  });
+});
 
 describe("gem shader optics", () => {
   test("samples the background for reflection and refraction", () => {

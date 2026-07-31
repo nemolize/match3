@@ -41,8 +41,8 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -23.7, 17.4, 16, -2.3, 55.9, 9.9, -9.3, 11.7, -28.7, 21.6, -1.2, -11, 50, 4.6,
-  -17.8, -4.4, -25.6, 22.7, 1.8, -9.8, 46.2, 5, -22.4, 1.2,
+  -59.1, -5.1, -4.1, -30, 33.4, -10.6, -25.9, -20.8, -66.9, -1.9, -28.2, -41.6,
+  22.5, -17.7, -43.1, -43.8, -62.4, 1.1, -22.8, -39.3, 21.6, -14, -49.1, -28.4,
 ];
 
 const expectedFacetSignature = [
@@ -115,7 +115,7 @@ test("renders deterministic refill state through WebGPU", async ({ page }) => {
   expect(timings?.passes?.gemRefraction?.sampleCount).toBe(1);
 });
 
-test("renders distinguishable faceted optical gems over the water", async ({
+test("renders distinguishable faceted optical gems over submerged sand", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -279,7 +279,7 @@ test("renders distinguishable faceted optical gems over the water", async ({
   );
 
   expect(difference.changedPixels).toBeGreaterThan(1_000);
-  expect(difference.meanChangedChannelDelta).toBeGreaterThan(68);
+  expect(difference.meanChangedChannelDelta).toBeGreaterThan(60);
   expect(difference.meanChangedChannelDelta).toBeLessThan(88);
   difference.gemColorDeltas.forEach((colorDelta) => {
     expect(

@@ -8,7 +8,7 @@ export const Match3Game = () => {
   const { gameState, handleSwipe, handleGemTap, newGame } = useMatch3Game();
 
   return (
-    <div className="beach-background flex min-h-svh flex-col items-center justify-center px-3 py-2 sm:min-h-screen sm:p-4">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-3 py-2 sm:min-h-screen sm:p-4">
       <motion.div
         className="relative w-full max-w-md"
         initial={{ opacity: 0, scale: 0.8 }}
@@ -36,13 +36,13 @@ export const Match3Game = () => {
 
         {/* Instructions */}
         <motion.div
-          className="mt-3 text-center text-xs text-white/90 drop-shadow-md sm:mt-6 sm:text-sm"
+          className="mt-3 text-center text-xs text-white/80 sm:mt-6 sm:text-sm"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
         >
           <p className="mb-2">Match 3 or more gems of the same color</p>
-          <p className="text-xs text-white/75">
+          <p className="text-xs text-white/60">
             Swipe a gem toward a neighbor — or tap two adjacent gems — to swap
             <br />
             Only swaps that create matches are allowed!

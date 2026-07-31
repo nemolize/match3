@@ -31,6 +31,7 @@ const MAX_GEMS = BOARD_SIZE * BOARD_SIZE;
 const INITIAL_FRAGMENT_CAPACITY = 128;
 const TIMING_QUERY_COUNT = 8;
 const MAX_WATER_FRAME_DELTA_MS = 50;
+const SAND_TEXTURE_URL = "/images/beach-sand.webp";
 const PASS_NAMES = [
   "backgroundCaustics",
   "gemRefraction",
@@ -54,6 +55,33 @@ const createShaderModule = async (
     );
   }
   return module;
+};
+
+const createSandTexture = async (device: GPUDevice): Promise<GPUTexture> => {
+  const response = await fetch(SAND_TEXTURE_URL);
+  if (!response.ok) {
+    throw new Error(`Sand texture could not be loaded (${response.status}).`);
+  }
+  const bitmap = await createImageBitmap(await response.blob());
+  try {
+    const texture = device.createTexture({
+      label: "beach-sand",
+      size: { width: bitmap.width, height: bitmap.height },
+      format: "rgba8unorm",
+      usage:
+        GPUTextureUsage.COPY_DST |
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING,
+    });
+    device.queue.copyExternalImageToTexture(
+      { source: bitmap },
+      { texture },
+      { width: bitmap.width, height: bitmap.height },
+    );
+    return texture;
+  } finally {
+    bitmap.close();
+  }
 };
 
 const createPipeline = (
@@ -195,6 +223,7 @@ export const createBoardRenderer = async (
       magFilter: "linear",
       minFilter: "linear",
     });
+    const sandTexture = await createSandTexture(device);
 
     const querySet = timestampQuerySupported
       ? device.createQuerySet({
@@ -259,7 +288,11 @@ export const createBoardRenderer = async (
     });
     const frameBindGroup = device.createBindGroup({
       layout: backgroundPipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+      entries: [
+        { binding: 0, resource: { buffer: uniformBuffer } },
+        { binding: 1, resource: sampler },
+        { binding: 2, resource: sandTexture.createView() },
+      ],
     });
     let compositeBindGroup: GPUBindGroup | null = null;
     let timingFrameCount = 0;
@@ -296,6 +329,7 @@ export const createBoardRenderer = async (
       }
       backgroundTexture?.destroy();
       sceneTexture?.destroy();
+      sandTexture.destroy();
       uniformBuffer.destroy();
       gemBuffer.destroy();
       fragmentBuffer.destroy();

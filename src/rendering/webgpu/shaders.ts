@@ -53,9 +53,9 @@ const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
-const WATER_ABSORPTION: vec3f = vec3f(3.1, 0.8, 0.08);
-const WATER_SCATTERING: vec3f = vec3f(0.08, 0.45, 0.65);
-const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.2, 0.65, 1.2);
+const WATER_ABSORPTION: vec3f = vec3f(4.0, 1.4, 0.28);
+const WATER_SCATTERING: vec3f = vec3f(0.1, 0.5, 0.72);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.12, 0.5, 0.95);
 
 struct WaterSurface {
   normal: vec3f,
@@ -179,7 +179,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     AIR_IOR / WATER_IOR
   );
   let depthFactor = smoothstep(0.0, 1.0, uv.y);
-  let meanWaterDepth = mix(0.08, 0.18, depthFactor);
+  let meanWaterDepth = mix(0.1, 0.25, depthFactor);
   let waterDepth = max(
     0.025,
     meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE

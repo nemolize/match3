@@ -33,6 +33,18 @@ describe("background shader", () => {
   });
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
+    expect(backgroundShader).toContain(
+      "const WATER_ABSORPTION: vec3f = vec3f(4.0, 1.4, 0.28);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_SCATTERING: vec3f = vec3f(0.1, 0.5, 0.72);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.12, 0.5, 0.95);",
+    );
+    expect(backgroundShader).toContain(
+      "let meanWaterDepth = mix(0.1, 0.25, depthFactor);",
+    );
     expect(backgroundShader).toContain("fn fresnelDielectric(");
     expect(backgroundShader).toContain(
       "let reflectionDirection = reflect(incidentDirection, surfaceNormal);",

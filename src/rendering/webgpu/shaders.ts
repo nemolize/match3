@@ -52,7 +52,15 @@ const TAU: f32 = 6.28318530718;
 const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
-const WATER_ABSORPTION: vec3f = vec3f(2.4, 0.55, 0.18);
+const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
+const WATER_ABSORPTION: vec3f = vec3f(3.1, 0.8, 0.08);
+const WATER_SCATTERING: vec3f = vec3f(0.08, 0.45, 0.65);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.2, 0.65, 1.2);
+
+struct WaterSurface {
+  normal: vec3f,
+  height: f32,
+}
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
   let positions = array<vec2f, 3>(
@@ -71,22 +79,23 @@ fn hash(seed: f32) -> f32 {
   return fract(sin(seed * 12.9898) * 43758.5453);
 }
 
-fn directionalWaveGradient(
+fn directionalWaveSample(
   uv: vec2f,
   direction: vec2f,
   wavelength: f32,
   amplitude: f32,
   speed: f32,
   time: f32
-) -> vec2f {
+) -> vec3f {
   let waveNumber = TAU / wavelength;
   let phase = dot(uv, direction) * waveNumber + time * speed;
-  return direction * (amplitude * waveNumber * cos(phase));
+  let gradient = direction * (amplitude * waveNumber * cos(phase));
+  return vec3f(gradient, amplitude * sin(phase));
 }
 
-fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
-  let gradient =
-    directionalWaveGradient(
+fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface {
+  let wave =
+    directionalWaveSample(
       uv,
       normalize(vec2f(0.82, 0.57)),
       0.38 * WATER_FEATURE_SCALE,
@@ -94,7 +103,7 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       0.85,
       time
     ) +
-    directionalWaveGradient(
+    directionalWaveSample(
       uv,
       normalize(vec2f(-0.36, 0.93)),
       0.23 * WATER_FEATURE_SCALE,
@@ -102,7 +111,7 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       -1.15,
       time
     ) +
-    directionalWaveGradient(
+    directionalWaveSample(
       uv,
       normalize(vec2f(0.96, -0.28)),
       0.14 * WATER_FEATURE_SCALE,
@@ -110,7 +119,7 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       1.65,
       time
     ) +
-    directionalWaveGradient(
+    directionalWaveSample(
       uv,
       normalize(vec2f(-0.91, 0.41)),
       0.055,
@@ -118,7 +127,7 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       2.8,
       time
     ) +
-    directionalWaveGradient(
+    directionalWaveSample(
       uv,
       normalize(vec2f(0.28, 0.96)),
       0.032,
@@ -126,7 +135,7 @@ fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f {
       -4.1,
       time
     );
-  return normalize(vec3f(-gradient, 1.0));
+  return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);
 }
 
 fn fresnelDielectric(cosineIncident: f32, incidentIor: f32, transmittedIor: f32) -> f32 {
@@ -160,7 +169,8 @@ fn sampleSky(direction: vec3f) -> vec3f {
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / (frame.canvas * frame.devicePixelRatio);
   let time = select(frame.waterTimeMs * 0.001, 0.0, frame.reducedMotion > 0.5);
-  let surfaceNormal = waterSurfaceNormal(uv, time);
+  let waterSurface = sampleWaterSurface(uv, time);
+  let surfaceNormal = waterSurface.normal;
   let viewDirection = vec3f(0.0, 0.0, 1.0);
   let incidentDirection = -viewDirection;
   let refractionDirection = refract(
@@ -169,7 +179,11 @@ fn sampleSky(direction: vec3f) -> vec3f {
     AIR_IOR / WATER_IOR
   );
   let depthFactor = smoothstep(0.0, 1.0, uv.y);
-  let waterDepth = mix(0.08, 0.18, depthFactor);
+  let meanWaterDepth = mix(0.08, 0.18, depthFactor);
+  let waterDepth = max(
+    0.025,
+    meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
+  );
   let opticalPathLength =
     waterDepth / max(0.2, abs(refractionDirection.z));
   let refractionOffset = refractionDirection.xy * opticalPathLength * 0.85;
@@ -189,9 +203,13 @@ fn sampleSky(direction: vec3f) -> vec3f {
     sandUv
   ).rgb;
   let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
-  let transmittance = exp(-WATER_ABSORPTION * opticalPathLength);
+  let extinction = WATER_ABSORPTION + WATER_SCATTERING;
+  let transmittance = exp(-extinction * opticalPathLength);
+  let singleScatteringAlbedo = WATER_SCATTERING / extinction;
   let inscattering =
-    vec3f(0.015, 0.22, 0.3) * (vec3f(1.0) - transmittance);
+    WATER_AMBIENT_RADIANCE *
+    singleScatteringAlbedo *
+    (vec3f(1.0) - transmittance);
   var transmission = sand * transmittance + inscattering;
   let rays = pow(
     max(0.0, sin(uv.x * (18.0 / WATER_FEATURE_SCALE) + time * 0.35)),

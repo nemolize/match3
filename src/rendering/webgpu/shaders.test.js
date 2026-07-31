@@ -6,7 +6,7 @@ describe("background shader", () => {
   test("refracts the sand through an animated water surface", () => {
     expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
     expect(backgroundShader).toContain(
-      "fn waterSurfaceNormal(uv: vec2f, time: f32) -> vec3f",
+      "fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface",
     );
     expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
     expect(backgroundShader).toContain("const WATER_FEATURE_SCALE: f32 = 2.0;");
@@ -18,6 +18,9 @@ describe("background shader", () => {
     expect(backgroundShader).toContain("0.012 * WATER_FEATURE_SCALE");
     expect(backgroundShader).toContain("0.055,");
     expect(backgroundShader).toContain("0.0018,");
+    expect(backgroundShader).toContain(
+      "return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);",
+    );
     expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
     expect(backgroundShader).toContain("let refractionDirection = refract(");
     expect(backgroundShader).toContain(
@@ -35,7 +38,19 @@ describe("background shader", () => {
       "let reflectionDirection = reflect(incidentDirection, surfaceNormal);",
     );
     expect(backgroundShader).toContain(
-      "let transmittance = exp(-WATER_ABSORPTION * opticalPathLength);",
+      "let extinction = WATER_ABSORPTION + WATER_SCATTERING;",
+    );
+    expect(backgroundShader).toContain(
+      "let transmittance = exp(-extinction * opticalPathLength);",
+    );
+    expect(backgroundShader).toContain(
+      "meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE",
+    );
+    expect(backgroundShader).toContain(
+      "let singleScatteringAlbedo = WATER_SCATTERING / extinction;",
+    );
+    expect(backgroundShader).toContain(
+      "WATER_AMBIENT_RADIANCE *\n    singleScatteringAlbedo",
     );
     expect(backgroundShader).toContain(
       "var color = mix(transmission, reflection, fresnel);",

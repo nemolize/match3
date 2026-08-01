@@ -43,6 +43,28 @@ const gemMaterialParameters = {
 export const backgroundShader = /* wgsl */ `
 ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var sandSampler: sampler;
+@group(0) @binding(2) var sandTexture: texture_2d<f32>;
+
+const AIR_IOR: f32 = 1.000293;
+const WATER_IOR: f32 = 1.333;
+const TAU: f32 = 6.28318530718;
+const WATER_FEATURE_SCALE: f32 = 2.0;
+const SAND_FEATURE_SCALE: f32 = 2.0;
+const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
+const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
+const MEAN_WATER_DEPTH: f32 = 0.25;
+const WATER_RAY_INTENSITY: f32 = 0.045;
+const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
+const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);
+const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);
+const BUBBLE_COUNT: i32 = 0;
+
+struct WaterSurface {
+  normal: vec3f,
+  height: f32,
+}
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
   let positions = array<vec2f, 3>(
@@ -61,17 +83,155 @@ fn hash(seed: f32) -> f32 {
   return fract(sin(seed * 12.9898) * 43758.5453);
 }
 
+fn directionalWaveSample(
+  uv: vec2f,
+  direction: vec2f,
+  wavelength: f32,
+  amplitude: f32,
+  speed: f32,
+  time: f32
+) -> vec3f {
+  let waveNumber = TAU / wavelength;
+  let phase = dot(uv, direction) * waveNumber + time * speed;
+  let gradient = direction * (amplitude * waveNumber * cos(phase));
+  return vec3f(gradient, amplitude * sin(phase));
+}
+
+fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface {
+  let wave =
+    directionalWaveSample(
+      uv,
+      normalize(vec2f(0.82, 0.57)),
+      0.38 * WATER_FEATURE_SCALE,
+      0.012 * WATER_FEATURE_SCALE,
+      0.85,
+      time
+    ) +
+    directionalWaveSample(
+      uv,
+      normalize(vec2f(-0.36, 0.93)),
+      0.23 * WATER_FEATURE_SCALE,
+      0.006 * WATER_FEATURE_SCALE,
+      -1.15,
+      time
+    ) +
+    directionalWaveSample(
+      uv,
+      normalize(vec2f(0.96, -0.28)),
+      0.14 * WATER_FEATURE_SCALE,
+      0.0025 * WATER_FEATURE_SCALE,
+      1.65,
+      time
+    ) +
+    directionalWaveSample(
+      uv,
+      normalize(vec2f(-0.91, 0.41)),
+      0.055,
+      0.0018,
+      2.8,
+      time
+    ) +
+    directionalWaveSample(
+      uv,
+      normalize(vec2f(0.28, 0.96)),
+      0.032,
+      0.0008,
+      -4.1,
+      time
+    );
+  return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);
+}
+
+fn fresnelDielectric(cosineIncident: f32, incidentIor: f32, transmittedIor: f32) -> f32 {
+  let clampedCosine = clamp(cosineIncident, 0.0, 1.0);
+  let eta = incidentIor / transmittedIor;
+  let sineTransmittedSquared =
+    eta * eta * max(0.0, 1.0 - clampedCosine * clampedCosine);
+  if (sineTransmittedSquared >= 1.0) {
+    return 1.0;
+  }
+  let cosineTransmitted = sqrt(1.0 - sineTransmittedSquared);
+  let parallel =
+    (transmittedIor * clampedCosine - incidentIor * cosineTransmitted) /
+    (transmittedIor * clampedCosine + incidentIor * cosineTransmitted);
+  let perpendicular =
+    (incidentIor * clampedCosine - transmittedIor * cosineTransmitted) /
+    (incidentIor * clampedCosine + transmittedIor * cosineTransmitted);
+  return 0.5 * (parallel * parallel + perpendicular * perpendicular);
+}
+
+fn sampleSky(direction: vec3f) -> vec3f {
+  let upness = clamp(direction.z, 0.0, 1.0);
+  let horizon = vec3f(0.58, 0.8, 0.88);
+  let zenith = vec3f(0.1, 0.38, 0.68);
+  let sky = mix(horizon, zenith, smoothstep(0.0, 1.0, upness));
+  let sunDirection = normalize(vec3f(-0.25, -0.3, 0.92));
+  let sun = pow(max(0.0, dot(direction, sunDirection)), 32.0);
+  return sky + vec3f(7.0, 6.4, 5.2) * sun;
+}
+
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / (frame.canvas * frame.devicePixelRatio);
   let time = select(frame.waterTimeMs * 0.001, 0.0, frame.reducedMotion > 0.5);
-  let surface = vec3f(0.08, 0.69, 0.82);
-  let depth = vec3f(0.025, 0.16, 0.34);
-  var color = mix(surface, depth, smoothstep(0.0, 1.0, uv.y));
-  let rays = pow(max(0.0, sin(uv.x * 18.0 + time * 0.35)), 14.0) *
-    (1.0 - uv.y) * 0.14;
-  let light = caustic(uv, time * 1.8) * 0.28;
-  color += vec3f(rays + light, rays + light, (rays + light) * 0.72);
-  for (var index = 0; index < 18; index += 1) {
+  let waterSurface = sampleWaterSurface(uv, time);
+  let surfaceNormal = waterSurface.normal;
+  let viewDirection = vec3f(0.0, 0.0, 1.0);
+  let incidentDirection = -viewDirection;
+  let refractionDirection = refract(
+    incidentDirection,
+    surfaceNormal,
+    AIR_IOR / WATER_IOR
+  );
+  let waterDepth = max(
+    0.025,
+    MEAN_WATER_DEPTH + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
+  );
+  let opticalPathLength =
+    waterDepth / max(0.2, abs(refractionDirection.z));
+  let refractionOffset = refractionDirection.xy * opticalPathLength * 0.85;
+  let refractedUv = clamp(
+    uv + refractionOffset,
+    vec2f(0.002),
+    vec2f(0.998)
+  );
+  let sandUv = clamp(
+    vec2f(0.5) + (uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset,
+    vec2f(0.002),
+    vec2f(0.998)
+  );
+  let sampledSand = textureSample(
+    sandTexture,
+    sandSampler,
+    sandUv
+  ).rgb;
+  let sand = sampledSand * vec3f(0.82, 0.82, 0.78);
+  let extinction = WATER_ABSORPTION + WATER_SCATTERING;
+  let transmittance = exp(-extinction * opticalPathLength);
+  let singleScatteringAlbedo = WATER_SCATTERING / extinction;
+  let inscattering =
+    WATER_AMBIENT_RADIANCE *
+    singleScatteringAlbedo *
+    (vec3f(1.0) - transmittance);
+  var transmission = sand * transmittance + inscattering;
+  let rays = pow(
+    max(0.0, sin(uv.x * (18.0 / WATER_FEATURE_SCALE) + time * 0.35)),
+    14.0
+  ) * WATER_RAY_INTENSITY;
+  let causticUv =
+    vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
+  let light = caustic(causticUv, time * 1.8) * 0.34;
+  transmission +=
+    WATER_LIGHT_COLOR * (rays + light) * transmittance;
+
+  let reflectionDirection = reflect(incidentDirection, surfaceNormal);
+  let reflection = sampleSky(reflectionDirection);
+  let fresnel = fresnelDielectric(
+    dot(viewDirection, surfaceNormal),
+    AIR_IOR,
+    WATER_IOR
+  );
+  var color = mix(transmission, reflection, fresnel);
+  for (var index = 0; index < BUBBLE_COUNT; index += 1) {
     let seed = f32(index);
     let center = vec2f(
       hash(seed + 1.0),

@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: path.resolve(__dirname, "e2e-tests/fixtures"),
+  publicDir: path.resolve(__dirname, "public"),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

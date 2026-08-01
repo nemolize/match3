@@ -41,13 +41,14 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -23.7, 17.4, 16, -2.3, 55.9, 9.9, -9.3, 11.7, -28.7, 21.6, -1.2, -11, 50, 4.6,
-  -17.8, -4.4, -25.6, 22.7, 1.8, -9.8, 46.2, 5, -22.4, 1.2,
+  1, 31.9, 29.7, 39, 75, 29.4, 15.3, 59.6, -22, 35.4, 23.1, 28.9, 70.1, 20.6,
+  11.4, 51.6, -15.1, 29.8, 19.7, 19.8, 58.5, 13.1, 4.9, 44,
 ];
 
 const expectedFacetSignature = [
-  1.12, -1.39, 1.4, 1.4, 1.3, 1.41, 1.33, 1.33, -1.31, 0.45, -0.9, -0.86, -0.18,
-  -0.79, -0.24, -1.08, 0.19, 0.93, -0.5, -0.55, -1.13, -0.62, -1.09, -0.24,
+  1.35, -0.2, 1.33, 1.25, 1.03, 1.26, 1.11, 1.24, -1.03, 1.31, -0.26, -0.04,
+  0.32, -0.07, 0.2, -0.02, -0.32, -1.11, -1.08, -1.2, -1.35, -1.19, -1.31,
+  -1.21,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -115,7 +116,7 @@ test("renders deterministic refill state through WebGPU", async ({ page }) => {
   expect(timings?.passes?.gemRefraction?.sampleCount).toBe(1);
 });
 
-test("renders distinguishable faceted optical gems over the water", async ({
+test("renders distinguishable faceted optical gems over submerged sand", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -279,7 +280,7 @@ test("renders distinguishable faceted optical gems over the water", async ({
   );
 
   expect(difference.changedPixels).toBeGreaterThan(1_000);
-  expect(difference.meanChangedChannelDelta).toBeGreaterThan(68);
+  expect(difference.meanChangedChannelDelta).toBeGreaterThan(60);
   expect(difference.meanChangedChannelDelta).toBeLessThan(88);
   difference.gemColorDeltas.forEach((colorDelta) => {
     expect(
@@ -316,6 +317,129 @@ test("renders distinguishable faceted optical gems over the water", async ({
       Math.abs(value - (expectedFacetSignature[index] ?? Number.NaN)),
     ).toBeLessThanOrEqual(0.75);
   });
+});
+
+test("animates water-surface reflection and refraction over sand", async ({
+  page,
+}) => {
+  await page.goto("/e2e-tests/fixtures/optics.html");
+  const canvas = await expectWebGpuReady(page);
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const firstCapture = await captureCanvasFrame(canvas);
+  await page.waitForTimeout(350);
+  const secondCapture = await captureCanvasFrame(canvas);
+
+  const changedPixels = await page.evaluate(
+    async ({ first, second }) => {
+      const decode = async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const surface = document.createElement("canvas");
+        surface.width = image.naturalWidth;
+        surface.height = image.naturalHeight;
+        const context = surface.getContext("2d");
+        if (!context) throw new Error("A 2D sampling context is unavailable.");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, surface.width, surface.height).data;
+      };
+      const firstPixels = await decode(first);
+      const secondPixels = await decode(second);
+      let changed = 0;
+      for (let index = 0; index < firstPixels.length; index += 4) {
+        const delta =
+          Math.abs((firstPixels[index] ?? 0) - (secondPixels[index] ?? 0)) +
+          Math.abs(
+            (firstPixels[index + 1] ?? 0) - (secondPixels[index + 1] ?? 0),
+          ) +
+          Math.abs(
+            (firstPixels[index + 2] ?? 0) - (secondPixels[index + 2] ?? 0),
+          );
+        if (delta > 12) changed += 1;
+      }
+      return changed;
+    },
+    { first: firstCapture, second: secondCapture },
+  );
+
+  expect(changedPixels).toBeGreaterThan(2_000);
+});
+
+test("renders uniformly dark blue water with bubbles disabled", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/e2e-tests/fixtures/optics.html");
+  const canvas = await expectWebGpuReady(page);
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const sandTextureSize = await page.evaluate(async () => {
+    const image = new Image();
+    image.src = "/images/beach-sand.webp";
+    await image.decode();
+    return [image.naturalWidth, image.naturalHeight];
+  });
+  expect(sandTextureSize).toEqual([2048, 2048]);
+  const capture = await captureCanvasFrame(canvas);
+
+  const profile = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const surface = document.createElement("canvas");
+    surface.width = image.naturalWidth;
+    surface.height = image.naturalHeight;
+    const context = surface.getContext("2d");
+    if (!context) throw new Error("A 2D sampling context is unavailable.");
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(
+      0,
+      0,
+      surface.width,
+      surface.height,
+    ).data;
+
+    const averageBand = (startY, endY) => {
+      const sum = [0, 0, 0];
+      let count = 0;
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = 0; x < surface.width; x += 1) {
+          const offset = (y * surface.width + x) * 4;
+          sum[0] += pixels[offset] ?? 0;
+          sum[1] += pixels[offset + 1] ?? 0;
+          sum[2] += pixels[offset + 2] ?? 0;
+          count += 1;
+        }
+      }
+      const color = sum.map((channel) => channel / count);
+      return {
+        blue: color[2] ?? 0,
+        green: color[1] ?? 0,
+        luminance:
+          (color[0] ?? 0) * 0.2126 +
+          (color[1] ?? 0) * 0.7152 +
+          (color[2] ?? 0) * 0.0722,
+        red: color[0] ?? 0,
+      };
+    };
+    const bandHeight = Math.floor(surface.height * 0.2);
+    return {
+      bottom: averageBand(surface.height - bandHeight, surface.height),
+      top: averageBand(0, bandHeight),
+    };
+  }, capture);
+
+  expect(profile.top.blue).toBeGreaterThan(profile.top.green * 1.3);
+  expect(profile.bottom.blue).toBeGreaterThan(profile.bottom.green * 1.3);
+  expect(profile.top.green).toBeGreaterThan(profile.top.red * 1.3);
+  expect(profile.bottom.green).toBeGreaterThan(profile.bottom.red * 1.3);
+  const meanLuminance = (profile.top.luminance + profile.bottom.luminance) / 2;
+  expect(
+    Math.abs(profile.top.luminance - profile.bottom.luminance) / meanLuminance,
+  ).toBeLessThan(0.08);
+  expect(profile.top.blue).toBeLessThan(130);
+  expect(profile.bottom.blue).toBeLessThan(130);
 });
 
 test("keeps semantic gems available while WebGPU animates a drop", async ({

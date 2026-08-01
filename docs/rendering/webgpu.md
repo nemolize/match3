@@ -8,7 +8,9 @@ transparent DOM grid for pointer, keyboard, focus, and accessibility semantics.
 
 Each frame is submitted as one command buffer with four ordered render passes:
 
-1. `backgroundCaustics` renders procedural water and caustics to
+1. `backgroundCaustics` refracts the sand through analytical wave heights and
+   normals, applies depth-modulated Beer-Lambert extinction, single scattering,
+   and caustics, then blends a reflected sky using dielectric Fresnel into
    `background-color`.
 2. `gemRefraction` copies that attachment to `scene-color`, then draws packed
    gem instances. This pass is the layer-interaction boundary for future

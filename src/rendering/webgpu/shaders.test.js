@@ -1,6 +1,91 @@
 import { describe, expect, test } from "vitest";
 
-import { gemShader } from "./shaders";
+import { backgroundShader, gemShader } from "./shaders";
+
+describe("background shader", () => {
+  test("refracts the sand through an animated water surface", () => {
+    expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
+    expect(backgroundShader).toContain(
+      "fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface",
+    );
+    expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
+    expect(backgroundShader).toContain("const WATER_FEATURE_SCALE: f32 = 2.0;");
+    expect(backgroundShader).toContain("const SAND_FEATURE_SCALE: f32 = 2.0;");
+    expect(backgroundShader).toContain(
+      "const CAUSTIC_FEATURE_SCALE: f32 = 0.75;",
+    );
+    expect(backgroundShader).toContain("0.38 * WATER_FEATURE_SCALE");
+    expect(backgroundShader).toContain("0.012 * WATER_FEATURE_SCALE");
+    expect(backgroundShader).toContain("0.055,");
+    expect(backgroundShader).toContain("0.0018,");
+    expect(backgroundShader).toContain(
+      "return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);",
+    );
+    expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
+    expect(backgroundShader).toContain("let refractionDirection = refract(");
+    expect(backgroundShader).toContain(
+      "refractionDirection.xy * opticalPathLength * 0.85",
+    );
+    expect(backgroundShader).toContain(
+      "(uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset",
+    );
+    expect(backgroundShader).toContain("sandSampler,\n    sandUv");
+  });
+
+  test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
+    expect(backgroundShader).toContain(
+      "const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);",
+    );
+    expect(backgroundShader).toContain("const MEAN_WATER_DEPTH: f32 = 0.25;");
+    expect(backgroundShader).toContain(
+      "const WATER_RAY_INTENSITY: f32 = 0.045;",
+    );
+    expect(backgroundShader).toContain("fn fresnelDielectric(");
+    expect(backgroundShader).toContain(
+      "let reflectionDirection = reflect(incidentDirection, surfaceNormal);",
+    );
+    expect(backgroundShader).toContain(
+      "let extinction = WATER_ABSORPTION + WATER_SCATTERING;",
+    );
+    expect(backgroundShader).toContain(
+      "let transmittance = exp(-extinction * opticalPathLength);",
+    );
+    expect(backgroundShader).toContain(
+      "MEAN_WATER_DEPTH + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE",
+    );
+    expect(backgroundShader).toContain(
+      "let singleScatteringAlbedo = WATER_SCATTERING / extinction;",
+    );
+    expect(backgroundShader).toContain(
+      "WATER_AMBIENT_RADIANCE *\n    singleScatteringAlbedo",
+    );
+    expect(backgroundShader).toContain(
+      "WATER_LIGHT_COLOR * (rays + light) * transmittance",
+    );
+    expect(backgroundShader).toContain(
+      "var color = mix(transmission, reflection, fresnel);",
+    );
+    expect(backgroundShader).toContain(
+      "return sky + vec3f(7.0, 6.4, 5.2) * sun;",
+    );
+    expect(backgroundShader).toContain(
+      "(refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE",
+    );
+    expect(backgroundShader).toContain(
+      "let light = caustic(causticUv, time * 1.8)",
+    );
+    expect(backgroundShader).toContain("const BUBBLE_COUNT: i32 = 0;");
+  });
+});
 
 describe("gem shader optics", () => {
   test("samples the background for reflection and refraction", () => {

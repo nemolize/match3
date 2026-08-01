@@ -41,14 +41,14 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -6.6, 27.8, 26.1, 34.2, 71, 26.2, 12.4, 55.5, -27.9, 32.9, 20.3, 23.7, 66.9,
-  18.5, 9.6, 48.5, -17.6, 28.5, 18.5, 17.3, 57.2, 11.6, 3.2, 42.6,
+  1, 31.9, 29.7, 39, 75, 29.4, 15.3, 59.6, -22, 35.4, 23.1, 28.9, 70.1, 20.6,
+  11.4, 51.6, -15.1, 29.8, 19.7, 19.8, 58.5, 13.1, 4.9, 44,
 ];
 
 const expectedFacetSignature = [
-  1.24, -0.86, 1.38, 1.31, 1.03, 1.25, 1.04, 1.26, -1.21, 1.4, -0.41, -0.2,
-  0.32, -0.04, 0.31, -0.07, -0.03, -0.55, -0.97, -1.11, -1.35, -1.2, -1.35,
-  -1.19,
+  1.35, -0.2, 1.33, 1.25, 1.03, 1.26, 1.11, 1.24, -1.03, 1.31, -0.26, -0.04,
+  0.32, -0.07, 0.2, -0.02, -0.32, -1.11, -1.08, -1.2, -1.35, -1.19, -1.31,
+  -1.21,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -366,7 +366,7 @@ test("animates water-surface reflection and refraction over sand", async ({
   expect(changedPixels).toBeGreaterThan(2_000);
 });
 
-test("renders a dark blue water-depth gradient with bubbles disabled", async ({
+test("renders uniformly dark blue water with bubbles disabled", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -374,6 +374,13 @@ test("renders a dark blue water-depth gradient with bubbles disabled", async ({
   const canvas = await expectWebGpuReady(page);
   await page.getByRole("button", { name: "Clear board" }).click();
   await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const sandTextureSize = await page.evaluate(async () => {
+    const image = new Image();
+    image.src = "/images/beach-sand.webp";
+    await image.decode();
+    return [image.naturalWidth, image.naturalHeight];
+  });
+  expect(sandTextureSize).toEqual([2048, 2048]);
   const capture = await captureCanvasFrame(canvas);
 
   const profile = await page.evaluate(async (base64) => {
@@ -418,15 +425,21 @@ test("renders a dark blue water-depth gradient with bubbles disabled", async ({
     };
     const bandHeight = Math.floor(surface.height * 0.2);
     return {
-      deep: averageBand(surface.height - bandHeight, surface.height),
-      shallow: averageBand(0, bandHeight),
+      bottom: averageBand(surface.height - bandHeight, surface.height),
+      top: averageBand(0, bandHeight),
     };
   }, capture);
 
-  expect(profile.deep.blue).toBeGreaterThan(profile.deep.green * 1.25);
-  expect(profile.deep.green).toBeGreaterThan(profile.deep.red * 1.15);
-  expect(profile.deep.luminance).toBeLessThan(profile.shallow.luminance * 0.8);
-  expect(profile.deep.blue).toBeLessThan(130);
+  expect(profile.top.blue).toBeGreaterThan(profile.top.green * 1.3);
+  expect(profile.bottom.blue).toBeGreaterThan(profile.bottom.green * 1.3);
+  expect(profile.top.green).toBeGreaterThan(profile.top.red * 1.3);
+  expect(profile.bottom.green).toBeGreaterThan(profile.bottom.red * 1.3);
+  const meanLuminance = (profile.top.luminance + profile.bottom.luminance) / 2;
+  expect(
+    Math.abs(profile.top.luminance - profile.bottom.luminance) / meanLuminance,
+  ).toBeLessThan(0.08);
+  expect(profile.top.blue).toBeLessThan(130);
+  expect(profile.bottom.blue).toBeLessThan(130);
 });
 
 test("keeps semantic gems available while WebGPU animates a drop", async ({

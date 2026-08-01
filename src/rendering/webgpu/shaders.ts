@@ -53,6 +53,8 @@ const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
+const MEAN_WATER_DEPTH: f32 = 0.25;
+const WATER_RAY_INTENSITY: f32 = 0.045;
 const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
 const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);
 const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);
@@ -180,11 +182,9 @@ fn sampleSky(direction: vec3f) -> vec3f {
     surfaceNormal,
     AIR_IOR / WATER_IOR
   );
-  let depthFactor = smoothstep(0.0, 1.0, uv.y);
-  let meanWaterDepth = mix(0.14, 0.36, depthFactor);
   let waterDepth = max(
     0.025,
-    meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
+    MEAN_WATER_DEPTH + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
   );
   let opticalPathLength =
     waterDepth / max(0.2, abs(refractionDirection.z));
@@ -216,7 +216,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
   let rays = pow(
     max(0.0, sin(uv.x * (18.0 / WATER_FEATURE_SCALE) + time * 0.35)),
     14.0
-  ) * (1.0 - uv.y) * 0.09;
+  ) * WATER_RAY_INTENSITY;
   let causticUv =
     vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
   let light = caustic(causticUv, time * 1.8) * 0.34;

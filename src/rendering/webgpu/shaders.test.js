@@ -45,8 +45,9 @@ describe("background shader", () => {
     expect(backgroundShader).toContain(
       "const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);",
     );
+    expect(backgroundShader).toContain("const MEAN_WATER_DEPTH: f32 = 0.25;");
     expect(backgroundShader).toContain(
-      "let meanWaterDepth = mix(0.14, 0.36, depthFactor);",
+      "const WATER_RAY_INTENSITY: f32 = 0.045;",
     );
     expect(backgroundShader).toContain("fn fresnelDielectric(");
     expect(backgroundShader).toContain(
@@ -59,7 +60,7 @@ describe("background shader", () => {
       "let transmittance = exp(-extinction * opticalPathLength);",
     );
     expect(backgroundShader).toContain(
-      "meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE",
+      "MEAN_WATER_DEPTH + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE",
     );
     expect(backgroundShader).toContain(
       "let singleScatteringAlbedo = WATER_SCATTERING / extinction;",

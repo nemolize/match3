@@ -34,13 +34,16 @@ describe("background shader", () => {
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
     expect(backgroundShader).toContain(
-      "const WATER_ABSORPTION: vec3f = vec3f(4.2, 1.8, 0.35);",
+      "const WATER_ABSORPTION: vec3f = vec3f(4.4, 2.0, 0.42);",
     );
     expect(backgroundShader).toContain(
-      "const WATER_SCATTERING: vec3f = vec3f(0.08, 0.35, 0.8);",
+      "const WATER_SCATTERING: vec3f = vec3f(0.06, 0.28, 0.9);",
     );
     expect(backgroundShader).toContain(
-      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.08, 0.35, 1.25);",
+      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.05, 0.28, 1.4);",
+    );
+    expect(backgroundShader).toContain(
+      "const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);",
     );
     expect(backgroundShader).toContain(
       "let meanWaterDepth = mix(0.1, 0.25, depthFactor);",
@@ -63,6 +66,9 @@ describe("background shader", () => {
     );
     expect(backgroundShader).toContain(
       "WATER_AMBIENT_RADIANCE *\n    singleScatteringAlbedo",
+    );
+    expect(backgroundShader).toContain(
+      "WATER_LIGHT_COLOR * (rays + light) * transmittance",
     );
     expect(backgroundShader).toContain(
       "var color = mix(transmission, reflection, fresnel);",

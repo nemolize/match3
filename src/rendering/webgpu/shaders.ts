@@ -53,9 +53,10 @@ const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
-const WATER_ABSORPTION: vec3f = vec3f(4.2, 1.8, 0.35);
-const WATER_SCATTERING: vec3f = vec3f(0.08, 0.35, 0.8);
-const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.08, 0.35, 1.25);
+const WATER_ABSORPTION: vec3f = vec3f(4.4, 2.0, 0.42);
+const WATER_SCATTERING: vec3f = vec3f(0.06, 0.28, 0.9);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.05, 0.28, 1.4);
+const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);
 
 struct WaterSurface {
   normal: vec3f,
@@ -202,7 +203,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     sandSampler,
     sandUv
   ).rgb;
-  let sand = sampledSand * vec3f(0.86, 0.82, 0.72);
+  let sand = sampledSand * vec3f(0.82, 0.82, 0.78);
   let extinction = WATER_ABSORPTION + WATER_SCATTERING;
   let transmittance = exp(-extinction * opticalPathLength);
   let singleScatteringAlbedo = WATER_SCATTERING / extinction;
@@ -219,8 +220,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
   let light = caustic(causticUv, time * 1.8) * 0.34;
   transmission +=
-    vec3f(rays + light, rays + light, (rays + light) * 0.72) *
-    transmittance;
+    WATER_LIGHT_COLOR * (rays + light) * transmittance;
 
   let reflectionDirection = reflect(incidentDirection, surfaceNormal);
   let reflection = sampleSky(reflectionDirection);

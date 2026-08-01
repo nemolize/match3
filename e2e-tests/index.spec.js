@@ -41,14 +41,14 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  -46.9, 6.1, 3.9, 8.5, 47.1, 9.6, -5, 24.8, -75.8, 13.9, 1.2, -11.8, 37.7,
-  -1.2, -11.6, 13.9, -57.6, 11.2, -0.1, -14.1, 33.4, -8.3, -19.4, 11.8,
+  -6.6, 27.8, 26.1, 34.2, 71, 26.2, 12.4, 55.5, -27.9, 32.9, 20.3, 23.7, 66.9,
+  18.5, 9.6, 48.5, -17.6, 28.5, 18.5, 17.3, 57.2, 11.6, 3.2, 42.6,
 ];
 
 const expectedFacetSignature = [
-  1.11, -1.33, 1.34, 1.41, 1.35, 1.3, 1.19, 1.4, -1.32, 1.08, -0.28, -0.59,
-  -0.3, -0.17, 0.07, -0.51, 0.21, 0.25, -1.06, -0.82, -1.05, -1.13, -1.26,
-  -0.88,
+  1.24, -0.86, 1.38, 1.31, 1.03, 1.25, 1.04, 1.26, -1.21, 1.4, -0.41, -0.2,
+  0.32, -0.04, 0.31, -0.07, -0.03, -0.55, -0.97, -1.11, -1.35, -1.2, -1.35,
+  -1.19,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -364,6 +364,69 @@ test("animates water-surface reflection and refraction over sand", async ({
   );
 
   expect(changedPixels).toBeGreaterThan(2_000);
+});
+
+test("renders a dark blue water-depth gradient with bubbles disabled", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/e2e-tests/fixtures/optics.html");
+  const canvas = await expectWebGpuReady(page);
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const capture = await captureCanvasFrame(canvas);
+
+  const profile = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const surface = document.createElement("canvas");
+    surface.width = image.naturalWidth;
+    surface.height = image.naturalHeight;
+    const context = surface.getContext("2d");
+    if (!context) throw new Error("A 2D sampling context is unavailable.");
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(
+      0,
+      0,
+      surface.width,
+      surface.height,
+    ).data;
+
+    const averageBand = (startY, endY) => {
+      const sum = [0, 0, 0];
+      let count = 0;
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = 0; x < surface.width; x += 1) {
+          const offset = (y * surface.width + x) * 4;
+          sum[0] += pixels[offset] ?? 0;
+          sum[1] += pixels[offset + 1] ?? 0;
+          sum[2] += pixels[offset + 2] ?? 0;
+          count += 1;
+        }
+      }
+      const color = sum.map((channel) => channel / count);
+      return {
+        blue: color[2] ?? 0,
+        green: color[1] ?? 0,
+        luminance:
+          (color[0] ?? 0) * 0.2126 +
+          (color[1] ?? 0) * 0.7152 +
+          (color[2] ?? 0) * 0.0722,
+        red: color[0] ?? 0,
+      };
+    };
+    const bandHeight = Math.floor(surface.height * 0.2);
+    return {
+      deep: averageBand(surface.height - bandHeight, surface.height),
+      shallow: averageBand(0, bandHeight),
+    };
+  }, capture);
+
+  expect(profile.deep.blue).toBeGreaterThan(profile.deep.green * 1.25);
+  expect(profile.deep.green).toBeGreaterThan(profile.deep.red * 1.15);
+  expect(profile.deep.luminance).toBeLessThan(profile.shallow.luminance * 0.8);
+  expect(profile.deep.blue).toBeLessThan(130);
 });
 
 test("keeps semantic gems available while WebGPU animates a drop", async ({

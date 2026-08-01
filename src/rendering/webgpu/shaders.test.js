@@ -34,19 +34,19 @@ describe("background shader", () => {
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
     expect(backgroundShader).toContain(
-      "const WATER_ABSORPTION: vec3f = vec3f(4.4, 2.0, 0.42);",
+      "const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);",
     );
     expect(backgroundShader).toContain(
-      "const WATER_SCATTERING: vec3f = vec3f(0.06, 0.28, 0.9);",
+      "const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);",
     );
     expect(backgroundShader).toContain(
-      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.05, 0.28, 1.4);",
+      "const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);",
     );
     expect(backgroundShader).toContain(
       "const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);",
     );
     expect(backgroundShader).toContain(
-      "let meanWaterDepth = mix(0.1, 0.25, depthFactor);",
+      "let meanWaterDepth = mix(0.14, 0.36, depthFactor);",
     );
     expect(backgroundShader).toContain("fn fresnelDielectric(");
     expect(backgroundShader).toContain(
@@ -82,6 +82,7 @@ describe("background shader", () => {
     expect(backgroundShader).toContain(
       "let light = caustic(causticUv, time * 1.8)",
     );
+    expect(backgroundShader).toContain("const BUBBLE_COUNT: i32 = 0;");
   });
 });
 

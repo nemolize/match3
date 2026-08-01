@@ -53,10 +53,11 @@ const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
-const WATER_ABSORPTION: vec3f = vec3f(4.4, 2.0, 0.42);
-const WATER_SCATTERING: vec3f = vec3f(0.06, 0.28, 0.9);
-const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.05, 0.28, 1.4);
+const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
+const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);
 const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);
+const BUBBLE_COUNT: i32 = 0;
 
 struct WaterSurface {
   normal: vec3f,
@@ -180,7 +181,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     AIR_IOR / WATER_IOR
   );
   let depthFactor = smoothstep(0.0, 1.0, uv.y);
-  let meanWaterDepth = mix(0.1, 0.25, depthFactor);
+  let meanWaterDepth = mix(0.14, 0.36, depthFactor);
   let waterDepth = max(
     0.025,
     meanWaterDepth + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
@@ -230,7 +231,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
     WATER_IOR
   );
   var color = mix(transmission, reflection, fresnel);
-  for (var index = 0; index < 18; index += 1) {
+  for (var index = 0; index < BUBBLE_COUNT; index += 1) {
     let seed = f32(index);
     let center = vec2f(
       hash(seed + 1.0),

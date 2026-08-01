@@ -2,6 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 import { e2eSoftwareWebGpuLaunchArgs } from "./playwright.webgpu";
 
+const playwrightPort = Number(process.env.PLAYWRIGHT_PORT ?? "5173");
+if (
+  !Number.isInteger(playwrightPort) ||
+  playwrightPort < 1 ||
+  playwrightPort > 65_535
+) {
+  throw new Error("PLAYWRIGHT_PORT must be an integer between 1 and 65535.");
+}
+const playwrightBaseUrl = `http://localhost:${playwrightPort}`;
+
 export default defineConfig({
   testDir: "./e2e-tests",
   fullyParallel: true,
@@ -10,7 +20,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: playwrightBaseUrl,
     launchOptions: {
       args: e2eSoftwareWebGpuLaunchArgs,
     },
@@ -23,8 +33,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm run dev",
-    url: "http://localhost:5173",
+    command: `pnpm exec vite --port ${playwrightPort}`,
+    url: playwrightBaseUrl,
     reuseExistingServer: !process.env.CI,
   },
 });

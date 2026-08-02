@@ -10,8 +10,7 @@ export const TIMING_CONFIG = {
   matchClearDuration: 200, // ms - Time for matched gems to disappear
 
   // Particle effects
-  particleLifetime: 1000, // ms - Time for particle effects to complete
-  particleCount: 8, // Number of particles per broken gem
+  particleLifetime: 1500, // ms - Time for particle effects to complete
 
   // Game flow delays
   matchClearDelay: 250, // ms - Pause after clearing matches to let players see results

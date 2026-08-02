@@ -1,14 +1,27 @@
 import { describe, expect, test } from "vitest";
 
+import {
+  FRAGMENT_FREE_FALL_CELL_DURATION_MS,
+  GPU_PARTICLE_CONFIG,
+} from "@/config/particles";
+import { TIMING_CONFIG } from "@/config/timing";
+import { GEM_CELL_PADDING_PX } from "@/constants/game";
+import {
+  REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND,
+  STANDARD_GRAVITY_ACCELERATION,
+} from "@/constants/physics";
+
 import { fragmentInstanceStruct, gemInstanceStruct } from "./instanceLayout";
 import {
   advanceWaterTime,
   collectNewFragmentBursts,
   FRAGMENT_INSTANCE_LAYOUT,
   FRAGMENT_INSTANCE_STRIDE,
+  fragmentBurstExpiries,
   fragmentCount,
   GEM_INSTANCE_LAYOUT,
   GEM_INSTANCE_STRIDE,
+  mergeActiveFragments,
   packFragmentBursts,
   packGemScene,
 } from "./sceneState";
@@ -146,9 +159,30 @@ describe("WebGPU scene packing", () => {
   });
 
   test("packs deterministic fragment descriptors from an injected random source", () => {
-    const randomValues = [0, 0.25, 0.5, 0.75, 0.1, 0.2, 0.3, 0.4];
-    let index = 0;
-    const random = () => randomValues[index++ % randomValues.length];
+    let randomCall = 0;
+    const random = () => {
+      const particleIndex = Math.floor(randomCall / 3);
+      const propertyIndex = randomCall % 3;
+      randomCall += 1;
+      if (propertyIndex === 2) return particleIndex % 2 === 0 ? 0.2 : 0.8;
+      return particleIndex % 2 === 0
+        ? propertyIndex === 1
+          ? 0.9
+          : 0.875
+        : propertyIndex === 1
+          ? 0.6
+          : 0.375;
+    };
+    const layout = {
+      canvasHeight: 416,
+      canvasWidth: 416,
+      boardSize: 384,
+      boardX: 16,
+      boardY: 16,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    };
     const descriptor = packFragmentBursts(
       [
         {
@@ -157,6 +191,107 @@ describe("WebGPU scene packing", () => {
           position: { row: 1, col: 2 },
         },
       ],
+      layout,
+      500,
+      random,
+    );
+
+    expect(fragmentCount(descriptor)).toBe(GPU_PARTICLE_CONFIG.instancesPerGem);
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.centerX]).toBeCloseTo(
+      0.310546875,
+    );
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.centerY]).toBeCloseTo(
+      0.1842447966337204,
+    );
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.size]).toBeCloseTo(
+      ((layout.cellSize - GEM_CELL_PADDING_PX * 2) *
+        (GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio +
+          (GPU_PARTICLE_CONFIG.maximumFragmentSizeRatio -
+            GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio) *
+            0.2)) /
+        layout.boardSize,
+    );
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.velocityX]).toBeGreaterThan(0);
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.velocityY]).toBeLessThan(0);
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.spawnedAt]).toBe(500);
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.gemType]).toBe(4);
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.lifetime]).toBe(
+      TIMING_CONFIG.particleLifetime,
+    );
+    const packedGravity = descriptor[FRAGMENT_INSTANCE_LAYOUT.gravity] ?? 0;
+    const freeFallCellDurationSeconds =
+      FRAGMENT_FREE_FALL_CELL_DURATION_MS / 1000;
+    expect((packedGravity * freeFallCellDurationSeconds ** 2) / 2).toBeCloseTo(
+      (layout.cellSize + layout.gap) / layout.boardSize,
+    );
+    expect(descriptor[FRAGMENT_INSTANCE_LAYOUT.mass]).toBeCloseTo(0.88);
+    expect(
+      descriptor[FRAGMENT_INSTANCE_STRIDE + FRAGMENT_INSTANCE_LAYOUT.mass],
+    ).toBeCloseTo(1.57);
+    const initialSpeedMagnitudes = Array.from(
+      { length: fragmentCount(descriptor) },
+      (_, particleIndex) => {
+        const offset = particleIndex * FRAGMENT_INSTANCE_STRIDE;
+        return Math.hypot(
+          descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.velocityX] ?? 0,
+          descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.velocityY] ?? 0,
+        );
+      },
+    );
+    expect(Math.max(...initialSpeedMagnitudes)).toBeGreaterThan(
+      Math.min(...initialSpeedMagnitudes),
+    );
+    const cellStepInBoardUnits =
+      (layout.cellSize + layout.gap) / layout.boardSize;
+    const burstEnergyHeightInCellSteps =
+      layout.cellSize / (layout.cellSize + layout.gap);
+    const burstEnergyHeightInMeters =
+      burstEnergyHeightInCellSteps * GPU_PARTICLE_CONFIG.worldMetersPerCell;
+    const maximumLaunchSpeedInMetersPerSecond = Math.sqrt(
+      2 * STANDARD_GRAVITY_ACCELERATION * burstEnergyHeightInMeters,
+    );
+    const maximumLaunchSpeedInCellStepsPerSecond =
+      maximumLaunchSpeedInMetersPerSecond /
+      GPU_PARTICLE_CONFIG.worldMetersPerCell;
+    expect(Math.max(...initialSpeedMagnitudes)).toBeCloseTo(
+      maximumLaunchSpeedInCellStepsPerSecond *
+        GPU_PARTICLE_CONFIG.launchSpeedMultiplier *
+        0.9 *
+        cellStepInBoardUnits,
+    );
+    const expiryVelocities = Array.from(
+      { length: fragmentCount(descriptor) },
+      (_, particleIndex) => {
+        const offset = particleIndex * FRAGMENT_INSTANCE_STRIDE;
+        const lifetimeSeconds =
+          (descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.lifetime] ?? 0) / 1000;
+        const velocityY =
+          descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.velocityY] ?? 0;
+        const gravity =
+          descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.gravity] ?? 0;
+        const mass = descriptor[offset + FRAGMENT_INSTANCE_LAYOUT.mass] ?? 1;
+        const dragRate = REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND / mass;
+        const expiryDragDecay = Math.exp(-dragRate * lifetimeSeconds);
+        return (
+          velocityY * expiryDragDecay +
+          (gravity * (1 - expiryDragDecay)) / dragRate
+        );
+      },
+    );
+    expect(expiryVelocities.every((velocity) => velocity > 0)).toBe(true);
+    expect(fragmentBurstExpiries(descriptor)).toEqual([
+      500 + TIMING_CONFIG.particleLifetime,
+    ]);
+  });
+
+  test("caps particle instances for a full-board clear", () => {
+    const bursts = Array.from({ length: 64 }, (_, index) => ({
+      gem: gem(`gem-${index}`, "blue", Math.floor(index / 8), index % 8),
+      key: `gem-${index}`,
+      position: { row: Math.floor(index / 8), col: index % 8 },
+    }));
+    const descriptor = packFragmentBursts(
+      bursts,
       {
         canvasHeight: 416,
         canvasWidth: 416,
@@ -168,14 +303,142 @@ describe("WebGPU scene packing", () => {
         gap: 4,
       },
       500,
-      random,
+      () => 0.5,
     );
 
-    expect(fragmentCount(descriptor)).toBe(8);
-    expect(Array.from(descriptor.slice(0, 10))).toEqual([
-      0.310546875, 0.1842447966337204, 0.0326741524040699,
-      0.0052083334885537624, -0.0052083334885537624, 90, 0, 500, 4, 1000,
+    expect(fragmentCount(descriptor)).toBe(
+      GPU_PARTICLE_CONFIG.maximumActiveInstances,
+    );
+  });
+
+  test("caps overlapping clears globally and prioritizes new particles", () => {
+    const bursts = Array.from({ length: 64 }, (_, index) => ({
+      gem: gem(`gem-${index}`, "blue", Math.floor(index / 8), index % 8),
+      key: `gem-${index}`,
+      position: { row: Math.floor(index / 8), col: index % 8 },
+    }));
+    const layout = {
+      canvasHeight: 416,
+      canvasWidth: 416,
+      boardSize: 384,
+      boardX: 16,
+      boardY: 16,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    };
+    const active = packFragmentBursts(bursts, layout, 500, () => 0.5);
+    const additions = packFragmentBursts(bursts, layout, 800, () => 0.5);
+    const merged = mergeActiveFragments(active, additions, 900);
+
+    expect(fragmentCount(merged)).toBe(
+      GPU_PARTICLE_CONFIG.maximumActiveInstances,
+    );
+    expect(merged[FRAGMENT_INSTANCE_LAYOUT.spawnedAt]).toBe(800);
+    expect(fragmentBurstExpiries(merged)).toHaveLength(64);
+  });
+
+  test("removes expired fragments while retaining newer bursts", () => {
+    const layout = {
+      canvasHeight: 416,
+      canvasWidth: 416,
+      boardSize: 384,
+      boardX: 16,
+      boardY: 16,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    };
+    const oldBurst = packFragmentBursts(
+      [
+        {
+          gem: gem("old", "blue", 0, 0),
+          key: "old",
+          position: { row: 0, col: 0 },
+        },
+      ],
+      layout,
+      0,
+      () => 0.5,
+    );
+    const newerBurst = packFragmentBursts(
+      [
+        {
+          gem: gem("new", "green", 1, 1),
+          key: "new",
+          position: { row: 1, col: 1 },
+        },
+      ],
+      layout,
+      750,
+      () => 0.5,
+    );
+    const active = mergeActiveFragments(oldBurst, newerBurst, 750);
+    const retained = mergeActiveFragments(
+      active,
+      new Float32Array(),
+      TIMING_CONFIG.particleLifetime,
+    );
+
+    expect(fragmentCount(retained)).toBe(GPU_PARTICLE_CONFIG.instancesPerGem);
+    expect(retained[FRAGMENT_INSTANCE_LAYOUT.spawnedAt]).toBe(750);
+    expect(fragmentBurstExpiries(retained)).toEqual([
+      750 + TIMING_CONFIG.particleLifetime,
     ]);
-    expect(descriptor[10]).toBeCloseTo(0.5 / 384);
+  });
+
+  test("keeps the newest dust when overlap reaches the cap", () => {
+    const activeBurst = [
+      {
+        gem: gem("active", "purple", 0, 0),
+        key: "active",
+        position: { row: 0, col: 0 },
+      },
+    ];
+    const additionBursts = Array.from({ length: 58 }, (_, index) => ({
+      gem: gem(`new-${index}`, "green", index % 8, index % 8),
+      key: `new-${index}`,
+      position: { row: index % 8, col: index % 8 },
+    }));
+    const layout = {
+      canvasHeight: 416,
+      canvasWidth: 416,
+      boardSize: 384,
+      boardX: 16,
+      boardY: 16,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    };
+    const active = packFragmentBursts(activeBurst, layout, 500, () => 0.5);
+    const additions = packFragmentBursts(
+      additionBursts,
+      layout,
+      800,
+      () => 0.5,
+    );
+    const merged = mergeActiveFragments(active, additions, 900);
+    const retainedActiveCount =
+      GPU_PARTICLE_CONFIG.maximumActiveInstances - fragmentCount(additions);
+
+    expect(fragmentCount(merged)).toBe(
+      GPU_PARTICLE_CONFIG.maximumActiveInstances,
+    );
+    expect(
+      Array.from(
+        { length: retainedActiveCount },
+        (_, index) =>
+          merged[
+            index * FRAGMENT_INSTANCE_STRIDE +
+              FRAGMENT_INSTANCE_LAYOUT.spawnedAt
+          ],
+      ).every((spawnedAt) => spawnedAt === 500),
+    ).toBe(true);
+    expect(
+      merged[
+        retainedActiveCount * FRAGMENT_INSTANCE_STRIDE +
+          FRAGMENT_INSTANCE_LAYOUT.spawnedAt
+      ],
+    ).toBe(800);
   });
 });

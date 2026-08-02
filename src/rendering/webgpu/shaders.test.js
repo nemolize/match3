@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { backgroundShader, gemShader } from "./shaders";
+import { backgroundShader, fragmentShader, gemShader } from "./shaders";
 
 describe("background shader", () => {
   test("refracts the sand through an animated water surface", () => {
@@ -167,5 +167,62 @@ describe("gem shader optics", () => {
     expect(gemShader).toContain(
       "smoothstep(TABLE_RADIUS, GIRDLE_START, gemSilhouette(p))",
     );
+  });
+});
+
+describe("fragment shader", () => {
+  test("renders only drifting gem-colored fragments", () => {
+    expect(fragmentShader).toContain(
+      "let fragmentColor = color * FRAGMENT_COLOR_INTENSITY;",
+    );
+    expect(fragmentShader).not.toContain("twinkle");
+    expect(fragmentShader).not.toContain("flutter");
+    expect(fragmentShader).not.toContain("pulse");
+    expect(fragmentShader).not.toContain("instance.seed");
+    expect(fragmentShader).not.toContain("FRAGMENT_EFFECT_");
+    expect(fragmentShader).not.toContain("effectKind");
+    expect(fragmentShader).not.toContain("sparkle");
+    expect(fragmentShader).not.toContain("shardColor");
+    expect(fragmentShader).not.toContain("FRAGMENT_EFFECT_SHOCKWAVE");
+    expect(fragmentShader).not.toContain("ringDistance");
+    expect(fragmentShader).not.toContain("ringColor");
+    expect(fragmentShader).not.toContain("let spectralEdge = mix(");
+    expect(fragmentShader).not.toContain(
+      "let dustColor = mix(color, vec3f(1.0)",
+    );
+  });
+
+  test("keeps fragment interiors solid with only a narrow edge fade", () => {
+    expect(fragmentShader).toContain(
+      "const FRAGMENT_EDGE_FADE_START: f32 = 0.88;",
+    );
+    expect(fragmentShader).toContain("const FRAGMENT_EDGE_RADIUS: f32 = 0.94;");
+    expect(fragmentShader).toContain(`let edgeCoverage = 1.0 - smoothstep(
+    FRAGMENT_EDGE_FADE_START,
+    FRAGMENT_EDGE_RADIUS,
+    radius
+  );`);
+    expect(fragmentShader).toContain("edgeCoverage * fade");
+    expect(fragmentShader).not.toContain("let mote =");
+    expect(fragmentShader).not.toContain("let core =");
+  });
+
+  test("animates drifting dust", () => {
+    expect(fragmentShader).toContain("let elapsedSeconds = elapsed / 1000.0");
+    expect(fragmentShader).not.toContain("let ticks =");
+    expect(fragmentShader).not.toContain("1000.0 / 60.0");
+    expect(fragmentShader).toContain("REFERENCE_FRAGMENT_DRAG_RATE");
+    expect(fragmentShader).toContain(
+      "REFERENCE_FRAGMENT_DRAG_RATE / instance.mass",
+    );
+    expect(fragmentShader).toContain(
+      "instance.velocityX * velocityTravelSeconds",
+    );
+    expect(fragmentShader).toContain(
+      "instance.gravity * gravityTravelSecondsSquared",
+    );
+    expect(fragmentShader).not.toContain("instance.rotation");
+    expect(fragmentShader).not.toContain("instance.rotationSpeed");
+    expect(fragmentShader).toContain("if (age >= 1.0)");
   });
 });

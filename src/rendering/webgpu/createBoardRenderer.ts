@@ -4,6 +4,7 @@ import {
   advanceWaterTime,
   collectNewFragmentBursts,
   FRAGMENT_INSTANCE_STRIDE,
+  fragmentBurstExpiries,
   fragmentCount,
   GEM_INSTANCE_STRIDE,
   mergeActiveFragments,
@@ -418,12 +419,7 @@ export const createBoardRenderer = async (
         scene.particleRandom,
       );
       fragments = mergeActiveFragments(fragments, additions, now);
-      activeBurstExpiries = activeBurstExpiries.filter(
-        (expiry) => expiry > now,
-      );
-      activeBurstExpiries.push(
-        ...collected.bursts.map(() => now + (additions[9] ?? 0)),
-      );
+      activeBurstExpiries = fragmentBurstExpiries(fragments);
       nextFragmentExpiry = Math.min(...activeBurstExpiries);
       ensureFragmentCapacity(fragmentCount(fragments));
       device.queue.writeBuffer(fragmentBuffer, 0, fragments);
@@ -500,13 +496,8 @@ export const createBoardRenderer = async (
 
       if (now >= nextFragmentExpiry) {
         fragments = mergeActiveFragments(fragments, new Float32Array(), now);
-        activeBurstExpiries = activeBurstExpiries.filter(
-          (expiry) => expiry > now,
-        );
-        nextFragmentExpiry =
-          activeBurstExpiries.length === 0
-            ? Number.POSITIVE_INFINITY
-            : Math.min(...activeBurstExpiries);
+        activeBurstExpiries = fragmentBurstExpiries(fragments);
+        nextFragmentExpiry = Math.min(...activeBurstExpiries);
         if (fragments.length > 0) {
           device.queue.writeBuffer(fragmentBuffer, 0, fragments);
         }

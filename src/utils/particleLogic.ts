@@ -1,3 +1,4 @@
+import { GPU_PARTICLE_CONFIG } from "@/config/particles";
 import { TIMING_CONFIG } from "@/config/timing";
 import { GEM_CELL_PADDING_PX } from "@/constants/game";
 import type { GemType } from "@/types/game";
@@ -8,6 +9,7 @@ export interface Particle {
   y: number;
   vx: number;
   vy: number;
+  mass: number;
   rotation: number;
   rotationSpeed: number;
   size: number;
@@ -15,7 +17,10 @@ export interface Particle {
 }
 
 const GRAVITY = 0.5;
-const INITIAL_VELOCITY_RANGE = 5;
+export const PARTICLE_INITIAL_SPEED_LIMIT = 7;
+const MINIMUM_FRAGMENT_MASS = 0.65;
+const MAXIMUM_FRAGMENT_MASS = 1.8;
+const FULL_CIRCLE_RADIANS = Math.PI * 2;
 const BASE_FRAME_MS = 1000 / 60;
 
 export interface CreateParticlesOptions {
@@ -34,12 +39,23 @@ export const createParticles = ({
   x,
   y,
   size,
-  count = TIMING_CONFIG.particleCount,
+  count = GPU_PARTICLE_CONFIG.instancesPerGem,
   random = Math.random,
 }: CreateParticlesOptions): Particle[] => {
   return Array.from({ length: count }, (_, i) => {
-    const angle = (i / count) * Math.PI * 2;
-    const speed = 2 + random() * INITIAL_VELOCITY_RANGE;
+    const angle = random() * FULL_CIRCLE_RADIANS;
+    const speed = random() * PARTICLE_INITIAL_SPEED_LIMIT;
+    const mass =
+      MINIMUM_FRAGMENT_MASS +
+      random() * (MAXIMUM_FRAGMENT_MASS - MINIMUM_FRAGMENT_MASS);
+    const massProgress =
+      (mass - MINIMUM_FRAGMENT_MASS) /
+      (MAXIMUM_FRAGMENT_MASS - MINIMUM_FRAGMENT_MASS);
+    const fragmentSizeRatio =
+      GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio +
+      massProgress *
+        (GPU_PARTICLE_CONFIG.maximumFragmentSizeRatio -
+          GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio);
 
     return {
       id: `particle-${i}`,
@@ -47,10 +63,11 @@ export const createParticles = ({
       x: x + GEM_CELL_PADDING_PX + size / 2,
       y: y + GEM_CELL_PADDING_PX + size / 2,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 2, // Slight upward bias
-      rotation: random() * 360,
-      rotationSpeed: (random() - 0.5) * 20,
-      size: size / 4 + random() * (size / 8),
+      vy: Math.sin(angle) * speed,
+      mass,
+      rotation: 0,
+      rotationSpeed: 0,
+      size: size * fragmentSizeRatio,
       opacity: 1,
     };
   });

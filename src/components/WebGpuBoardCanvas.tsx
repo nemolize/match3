@@ -43,6 +43,8 @@ export const WebGpuBoardCanvas = ({
     onStatusChange,
   });
   const shouldReduceMotion = useReducedMotion() ?? false;
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [rendererAttempt, setRendererAttempt] = useState(0);
   const [status, setStatus] = useState<BoardRendererStatus>({
     state: "initializing",
   });
@@ -91,6 +93,7 @@ export const WebGpuBoardCanvas = ({
     const updateStatus = (nextStatus: BoardRendererStatus) => {
       if (cancelled) return;
       setStatus(nextStatus);
+      if (nextStatus.state === "ready") setIsRecovering(false);
       callbacksRef.current.onStatusChange?.(nextStatus);
     };
     const resize = () => {
@@ -150,12 +153,27 @@ export const WebGpuBoardCanvas = ({
       rendererRef.current = null;
       renderer?.dispose();
     };
-  }, [boardRef]);
+  }, [boardRef, rendererAttempt]);
 
-  const diagnostic =
+  const retryRenderer = () => {
+    const nextStatus: BoardRendererStatus = { state: "initializing" };
+    setIsRecovering(true);
+    setStatus(nextStatus);
+    callbacksRef.current.onStatusChange?.(nextStatus);
+    setRendererAttempt((attempt) => attempt + 1);
+  };
+
+  const statusDiagnostic =
     status.state === "unavailable" || status.state === "lost"
       ? status.message
       : null;
+  const diagnostic =
+    statusDiagnostic ??
+    (isRecovering && status.state === "initializing"
+      ? "Reinitializing WebGPU..."
+      : null);
+  const canRetry =
+    status.state === "lost" || (isRecovering && status.state === "unavailable");
 
   return (
     <>
@@ -168,11 +186,26 @@ export const WebGpuBoardCanvas = ({
       />
       <div aria-hidden="true" data-particle-renderer="webgpu" />
       {diagnostic !== null && (
-        <div
-          className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-950/90 p-6 text-center text-sm text-white"
-          role="alert"
-        >
-          {diagnostic}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-2xl bg-slate-950/90 p-6 text-center text-sm text-white">
+          <p role="alert">{diagnostic}</p>
+          {canRetry && (
+            <button
+              type="button"
+              className="rounded-full bg-white px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              onClick={retryRenderer}
+            >
+              Retry renderer
+            </button>
+          )}
+          {isRecovering && status.state === "initializing" && (
+            <button
+              type="button"
+              className="cursor-wait rounded-full bg-white/70 px-4 py-2 font-semibold text-slate-700"
+              disabled
+            >
+              Retrying...
+            </button>
+          )}
         </div>
       )}
     </>

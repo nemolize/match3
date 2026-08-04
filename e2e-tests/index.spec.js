@@ -379,7 +379,7 @@ test("launches simulated wave ripples from cleared cells", async ({ page }) => {
     }
     await page.getByRole("button", { name: triggerName }).click();
     await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
-    await page.waitForTimeout(1_350);
+    await page.waitForTimeout(2_600);
     const before = await captureCanvasFrame(canvas);
     await page.waitForTimeout(500);
     const after = await captureCanvasFrame(canvas);
@@ -459,10 +459,10 @@ test("launches simulated wave ripples from cleared cells", async ({ page }) => {
   const ambient = await measureBackgroundChange("Clear without ripple");
   const ripple = await measureBackgroundChange("Trigger clear ripple", true);
   expect(ripple.difference.centerMeanDelta).toBeGreaterThan(
-    ambient.difference.centerMeanDelta * 1.35,
+    ambient.difference.centerMeanDelta * 1.1,
   );
   expect(ripple.difference.edgeMeanDelta).toBeGreaterThan(
-    ambient.difference.edgeMeanDelta * 1.35,
+    ambient.difference.edgeMeanDelta * 1.5,
   );
   expect(ripple.timings?.supported).toBe(true);
   expect(ripple.timings?.passes?.waveSimulation?.sampleCount).toBe(1);

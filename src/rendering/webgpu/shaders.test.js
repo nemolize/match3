@@ -36,10 +36,10 @@ describe("background shader", () => {
 
   test("highlights simulated displacement and wave energy", () => {
     expect(backgroundShader).toContain(
-      "smoothstep(0.001, 0.02, waterSurface.energy)",
+      "smoothstep(0.00025, 0.012, waterSurface.energy)",
     );
     expect(backgroundShader).toContain(
-      "let displacedWater = smoothstep(0.0025, 0.018, abs(waterSurface.height));",
+      "let displacedWater = smoothstep(0.00075, 0.012, abs(waterSurface.height));",
     );
     expect(backgroundShader).toContain(
       "(wavefront * 0.34 + displacedWater * 0.16) *",
@@ -107,8 +107,15 @@ describe("wave simulation shader", () => {
     expect(waveSimulationShader).toContain("@compute @workgroup_size(8, 8)");
     expect(waveSimulationShader).toContain("let laplacian =");
     expect(waveSimulationShader).toContain("laplacian * WAVE_SPEED");
+    expect(waveSimulationShader).toContain("const WAVE_SPEED: f32 = 0.1;");
     expect(waveSimulationShader).toContain(
       "state.y * pow(VELOCITY_DAMPING, deltaFrames)",
+    );
+    expect(waveSimulationShader).toContain(
+      "const VELOCITY_DAMPING: f32 = 0.996;",
+    );
+    expect(waveSimulationShader).toContain(
+      "const EDGE_DAMPING_MINIMUM: f32 = 0.97;",
     );
     expect(waveSimulationShader).toContain(
       "vec4f(nextHeight, nextVelocity, surfaceGradient)",
@@ -126,7 +133,7 @@ describe("wave simulation shader", () => {
       "impulseVelocity += impulse.z * exp(-distanceSquared * 2.4);",
     );
     expect(waveSimulationShader).toContain(
-      "mix(0.9, 1.0, smoothstep(0.0, 0.08, edgeDistance))",
+      "smoothstep(0.0, 0.08, edgeDistance)",
     );
   });
 });

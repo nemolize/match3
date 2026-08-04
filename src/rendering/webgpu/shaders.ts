@@ -218,8 +218,8 @@ fn sampleSky(direction: vec3f) -> vec3f {
     WATER_IOR
   );
   var color = mix(transmission, reflection, fresnel);
-  let wavefront = smoothstep(0.001, 0.02, waterSurface.energy);
-  let displacedWater = smoothstep(0.0025, 0.018, abs(waterSurface.height));
+  let wavefront = smoothstep(0.00025, 0.012, waterSurface.energy);
+  let displacedWater = smoothstep(0.00075, 0.012, abs(waterSurface.height));
   color += WATER_LIGHT_COLOR *
     (wavefront * 0.34 + displacedWater * 0.16) *
     transmittance;
@@ -254,8 +254,9 @@ struct WaveStep {
 
 const TAU: f32 = 6.28318530718;
 const MAX_IMPULSES: u32 = ${WAVE_SIMULATION_CONFIG.maximumImpulses}u;
-const WAVE_SPEED: f32 = 0.18;
-const VELOCITY_DAMPING: f32 = 0.986;
+const WAVE_SPEED: f32 = ${WAVE_SIMULATION_CONFIG.propagationSpeed};
+const VELOCITY_DAMPING: f32 = ${WAVE_SIMULATION_CONFIG.velocityDampingPerFrame};
+const EDGE_DAMPING_MINIMUM: f32 = ${WAVE_SIMULATION_CONFIG.edgeDampingMinimum};
 
 fn waveStateAt(cell: vec2i, dimensions: vec2i) -> vec2f {
   return textureLoad(
@@ -299,7 +300,11 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
   }
 
   let edgeDistance = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
-  let edgeDamping = mix(0.9, 1.0, smoothstep(0.0, 0.08, edgeDistance));
+  let edgeDamping = mix(
+    EDGE_DAMPING_MINIMUM,
+    1.0,
+    smoothstep(0.0, 0.08, edgeDistance)
+  );
   let nextVelocity = (
     state.y * pow(VELOCITY_DAMPING, deltaFrames) +
     (laplacian * WAVE_SPEED + ambientForce) * deltaFrames +

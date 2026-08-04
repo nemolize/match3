@@ -1,3 +1,5 @@
+import { REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND } from "@/constants/physics";
+
 import { fragmentInstanceStruct, gemInstanceStruct } from "./instanceLayout";
 
 const frameUniformStruct = /* wgsl */ `
@@ -582,11 +584,16 @@ ${fragmentInstanceStruct}
 
 @group(0) @binding(1) var<storage, read> instances: array<FragmentInstance>;
 
+const REFERENCE_FRAGMENT_DRAG_RATE: f32 = ${REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND};
+const FRAGMENT_EDGE_FADE_START: f32 = 0.88;
+const FRAGMENT_EDGE_RADIUS: f32 = 0.94;
+const FRAGMENT_COLOR_INTENSITY: f32 = 2.25;
+
 struct Output {
   @builtin(position) position: vec4f,
   @location(0) local: vec2f,
   @location(1) @interpolate(flat) gemType: f32,
-  @location(2) @interpolate(flat) alpha: f32,
+  @location(2) @interpolate(flat) age: f32,
 }
 
 @vertex fn vertexMain(
@@ -599,21 +606,27 @@ struct Output {
   );
   let instance = instances[instanceIndex];
   let elapsed = max(0.0, frame.timeMs - instance.spawnedAt);
-  let ticks = elapsed / (1000.0 / 60.0);
+  let elapsedSeconds = elapsed / 1000.0;
+  let age = clamp(elapsed / max(instance.lifetime, 1.0), 0.0, 1.0);
+  let dragRate = REFERENCE_FRAGMENT_DRAG_RATE / instance.mass;
+  let velocityTravelSeconds =
+    (1.0 - exp(-dragRate * elapsedSeconds)) / dragRate;
+  let gravityTravelSecondsSquared =
+    (elapsedSeconds - velocityTravelSeconds) / dragRate;
   let normalizedCenter = vec2f(
-    instance.centerX + instance.velocityX * ticks,
+    instance.centerX + instance.velocityX * velocityTravelSeconds,
     instance.centerY
-      + instance.velocityY * ticks
-      + 0.5 * instance.gravity * ticks * ticks
+      + instance.velocityY * velocityTravelSeconds
+      + instance.gravity * gravityTravelSecondsSquared
   );
   let center = frame.boardOrigin + normalizedCenter * frame.boardSize;
-  let angle = radians(instance.rotation + instance.rotationSpeed * ticks);
+  var size = instance.size * (1.0 - 0.48 * age);
+  if (age >= 1.0) {
+    size = 0.0;
+  }
   let local = corners[vertexIndex];
-  let rotated = vec2f(
-    local.x * cos(angle) - local.y * sin(angle),
-    local.x * sin(angle) + local.y * cos(angle)
-  );
-  let pixel = center + rotated * instance.size * frame.boardSize * 0.5;
+  let shaped = local * vec2f(0.78, 0.88);
+  let pixel = center + shaped * size * frame.boardSize * 0.5;
   var output: Output;
   output.position = vec4f(
     pixel.x / frame.canvas.x * 2.0 - 1.0,
@@ -623,13 +636,22 @@ struct Output {
   );
   output.local = local;
   output.gemType = instance.gemType;
-  output.alpha = max(0.0, 1.0 - elapsed / instance.lifetime);
+  output.age = age;
   return output;
 }
 
 ${gemColorFunction}
 
 @fragment fn fragmentMain(input: Output) -> @location(0) vec4f {
-  return vec4f(gemColor(i32(input.gemType)), input.alpha);
+  let color = gemColor(i32(input.gemType));
+  let fade = 1.0 - smoothstep(0.58, 1.0, input.age);
+  let radius = length(input.local);
+  let edgeCoverage = 1.0 - smoothstep(
+    FRAGMENT_EDGE_FADE_START,
+    FRAGMENT_EDGE_RADIUS,
+    radius
+  );
+  let fragmentColor = color * FRAGMENT_COLOR_INTENSITY;
+  return vec4f(fragmentColor, edgeCoverage * fade);
 }
 `;

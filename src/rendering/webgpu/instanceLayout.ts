@@ -1,7 +1,4 @@
-type InstanceGroup = readonly [
-  name: string,
-  components: readonly [string, string, string, string],
-];
+type InstanceGroup = readonly [name: string, components: readonly string[]];
 
 type ComponentName<Groups extends readonly InstanceGroup[]> =
   Groups[number][1][number];
@@ -43,8 +40,8 @@ const gemInstance = createInstanceLayout("GemInstance", [
 
 const fragmentInstance = createInstanceLayout("FragmentInstance", [
   ["centerSizeVelocityX", ["centerX", "centerY", "size", "velocityX"]],
-  ["motionAndTime", ["velocityY", "rotation", "rotationSpeed", "spawnedAt"]],
-  ["style", ["gemType", "lifetime", "gravity", "reserved"]],
+  ["motionAndTime", ["velocityY", "spawnedAt", "gemType", "lifetime"]],
+  ["physics", ["gravity", "mass"]],
 ] as const);
 
 export const GEM_INSTANCE_LAYOUT = {
@@ -70,13 +67,11 @@ export const FRAGMENT_INSTANCE_LAYOUT = {
   size: fragmentInstance.offsetOf("size"),
   velocityX: fragmentInstance.offsetOf("velocityX"),
   velocityY: fragmentInstance.offsetOf("velocityY"),
-  rotation: fragmentInstance.offsetOf("rotation"),
-  rotationSpeed: fragmentInstance.offsetOf("rotationSpeed"),
   spawnedAt: fragmentInstance.offsetOf("spawnedAt"),
   gemType: fragmentInstance.offsetOf("gemType"),
   lifetime: fragmentInstance.offsetOf("lifetime"),
   gravity: fragmentInstance.offsetOf("gravity"),
-  reserved: fragmentInstance.offsetOf("reserved"),
+  mass: fragmentInstance.offsetOf("mass"),
 };
 export const FRAGMENT_INSTANCE_STRIDE = fragmentInstance.stride;
 export const fragmentInstanceStruct = fragmentInstance.wgsl;

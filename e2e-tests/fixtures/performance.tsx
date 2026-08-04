@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { GameBoard } from "@/components/GameBoard";
+import { GPU_PARTICLE_CONFIG } from "@/config/particles";
 import { TIMING_CONFIG } from "@/config/timing";
 import { BOARD_SIZE, GEM_TYPES } from "@/constants/game";
 import type { Gem, Match } from "@/types/game";
@@ -150,7 +151,9 @@ const PerformanceFixture = () => {
           type="button"
           data-burst-duration-ms={TIMING_CONFIG.particleLifetime}
           data-expected-burst-count="12"
-          data-expected-particle-count={12 * TIMING_CONFIG.particleCount}
+          data-expected-particle-count={
+            12 * GPU_PARTICLE_CONFIG.instancesPerGem
+          }
           data-particle-random-seed={PARTICLE_RANDOM_SEED}
           data-testid="trigger-bursts"
           onClick={triggerBursts}

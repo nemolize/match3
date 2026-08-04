@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 
+import { GPU_PARTICLE_CONFIG } from "@/config/particles";
+import { TIMING_CONFIG } from "@/config/timing";
 import { GEM_CELL_PADDING_PX } from "@/constants/game";
 
 import {
@@ -22,21 +24,46 @@ describe("particleLogic", () => {
     });
 
     test("uses an injected random source for reproducible particles", () => {
+      const randomValues = [0.25, 0.5, 0.5];
+      let randomIndex = 0;
       const particles = createParticles({
         x: 0,
         y: 0,
         size: 40,
         count: 1,
-        random: () => 0.5,
+        random: () => randomValues[randomIndex++],
       });
 
       expect(particles[0]).toMatchObject({
-        vx: 4.5,
-        vy: -2,
-        rotation: 180,
+        vx: expect.closeTo(0),
+        vy: 3.5,
+        mass: 1.225,
+        rotation: 0,
         rotationSpeed: 0,
-        size: 12.5,
+        size: 15,
       });
+    });
+
+    test("assigns uniformly random directions, speeds, and masses", () => {
+      const randomValues = [0, 1, 0, 0.25, 1, 1];
+      let randomIndex = 0;
+      const particles = createParticles({
+        x: 0,
+        y: 0,
+        size: 40,
+        count: 2,
+        random: () => randomValues[randomIndex++],
+      });
+      expect(particles[0]).toMatchObject({
+        vx: 7,
+        vy: 0,
+        mass: 0.65,
+        size: 10,
+      });
+      expect(particles[1].vx).toBeCloseTo(0);
+      expect(particles[1].vy).toBeCloseTo(7);
+      expect(particles[1].mass).toBeCloseTo(1.8);
+      expect(particles[1].size).toBe(20);
     });
 
     test("should position particles at gem center accounting for cell padding", () => {
@@ -77,20 +104,21 @@ describe("particleLogic", () => {
     });
 
     test("should create particles with velocities in different directions", () => {
+      const randomValues = [0, 1, 0.5, 0.25, 1, 0.5, 0.5, 1, 0.5, 0.75, 1, 0.5];
+      let randomIndex = 0;
       const particles = createParticles({
         x: 0,
         y: 0,
         size: 50,
-        count: 8,
+        count: 4,
+        random: () => randomValues[randomIndex++],
       });
 
-      // Collect velocity directions
       const hasPositiveVx = particles.some((p) => p.vx > 0);
       const hasNegativeVx = particles.some((p) => p.vx < 0);
       const hasPositiveVy = particles.some((p) => p.vy > 0);
       const hasNegativeVy = particles.some((p) => p.vy < 0);
 
-      // Particles should be created in multiple directions
       expect(hasPositiveVx).toBe(true);
       expect(hasNegativeVx).toBe(true);
       expect(hasPositiveVy).toBe(true);
@@ -110,30 +138,30 @@ describe("particleLogic", () => {
       });
     });
 
-    test("should create particles with varying sizes", () => {
+    test("scales fragment size with mass between configured bounds", () => {
       const gemSize = 60;
+      const randomValues = [0, 0, 0, 0, 0, 0.5, 0, 0, 1];
+      let randomIndex = 0;
       const particles = createParticles({
         x: 0,
         y: 0,
         size: gemSize,
-        count: 10,
+        count: 3,
+        random: () => randomValues[randomIndex++],
       });
 
-      const sizes = particles.map((p) => p.size);
-      const uniqueSizes = new Set(sizes);
-
-      // Due to randomness, we should have multiple different sizes
-      // (though theoretically could have duplicates)
-      expect(uniqueSizes.size).toBeGreaterThan(1);
-
-      // All sizes should be within expected range: gemSize/4 to gemSize/4 + gemSize/8
-      const minSize = gemSize / 4;
-      const maxSize = gemSize / 4 + gemSize / 8;
-
-      particles.forEach((particle) => {
-        expect(particle.size).toBeGreaterThanOrEqual(minSize);
-        expect(particle.size).toBeLessThanOrEqual(maxSize);
-      });
+      expect(particles[0]?.size).toBeCloseTo(
+        gemSize * GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio,
+      );
+      expect(particles[1]?.size).toBeCloseTo(
+        gemSize *
+          ((GPU_PARTICLE_CONFIG.minimumFragmentSizeRatio +
+            GPU_PARTICLE_CONFIG.maximumFragmentSizeRatio) /
+            2),
+      );
+      expect(particles[2]?.size).toBeCloseTo(
+        gemSize * GPU_PARTICLE_CONFIG.maximumFragmentSizeRatio,
+      );
     });
 
     test("should create particles with unique IDs", () => {
@@ -395,7 +423,7 @@ describe("particleLogic", () => {
 
       expect(updated[0].x).toBeCloseTo(400);
       expect(updated[0].y).toBeCloseTo(325);
-      expect(updated[0].opacity).toBe(0.5);
+      expect(updated[0].opacity).toBe(1 - 500 / TIMING_CONFIG.particleLifetime);
     });
 
     test("should produce the same result for every frame schedule", () => {

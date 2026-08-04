@@ -1,7 +1,12 @@
+import { GPU_PARTICLE_CONFIG } from "@/config/particles";
 import { TIMING_CONFIG } from "@/config/timing";
 import { GEM_CELL_PADDING_PX } from "@/constants/game";
+import { STANDARD_GRAVITY_ACCELERATION } from "@/constants/physics";
 import type { Gem, GemType, Position } from "@/types/game";
-import { createParticles } from "@/utils/particleLogic";
+import {
+  createParticles,
+  PARTICLE_INITIAL_SPEED_LIMIT,
+} from "@/utils/particleLogic";
 
 import {
   FRAGMENT_INSTANCE_LAYOUT,
@@ -107,6 +112,12 @@ export interface FragmentBurst {
   position: Position;
 }
 
+const particleCountPerBurst = (burstCount: number): number =>
+  Math.min(
+    GPU_PARTICLE_CONFIG.instancesPerGem,
+    Math.floor(GPU_PARTICLE_CONFIG.maximumActiveInstances / burstCount),
+  );
+
 export const collectNewFragmentBursts = (
   scene: BoardSceneUpdate,
   previousMatchKey: string,
@@ -134,22 +145,45 @@ export const packFragmentBursts = (
   spawnedAt: number,
   random: (() => number) | undefined,
 ): Float32Array<ArrayBuffer> => {
+  if (bursts.length === 0) return new Float32Array();
+  const particlesPerBurst = particleCountPerBurst(bursts.length);
   const values = new Float32Array(
-    bursts.length * TIMING_CONFIG.particleCount * FRAGMENT_INSTANCE_STRIDE,
+    bursts.length * particlesPerBurst * FRAGMENT_INSTANCE_STRIDE,
   );
+  const normalizer = layout.boardSize;
+  const step = layout.cellSize + layout.gap;
+  const cellStepInBoardUnits = step / normalizer;
+  const lifetime = TIMING_CONFIG.particleLifetime;
+  const burstEnergyHeightInCellSteps = layout.cellSize / step;
+  const burstEnergyHeightInMeters =
+    burstEnergyHeightInCellSteps * GPU_PARTICLE_CONFIG.worldMetersPerCell;
+  const maximumLaunchSpeedInMetersPerSecond = Math.sqrt(
+    2 * STANDARD_GRAVITY_ACCELERATION * burstEnergyHeightInMeters,
+  );
+  const maximumLaunchSpeedInCellStepsPerSecond =
+    maximumLaunchSpeedInMetersPerSecond /
+    GPU_PARTICLE_CONFIG.worldMetersPerCell;
+  const launchSpeedScale =
+    (maximumLaunchSpeedInCellStepsPerSecond *
+      GPU_PARTICLE_CONFIG.launchSpeedMultiplier) /
+    PARTICLE_INITIAL_SPEED_LIMIT;
+  const gravityInBoardUnitsPerSecondSquared =
+    (STANDARD_GRAVITY_ACCELERATION / GPU_PARTICLE_CONFIG.worldMetersPerCell) *
+    cellStepInBoardUnits;
   let descriptorOffset = 0;
   bursts.forEach(({ gem, position }) => {
-    const step = layout.cellSize + layout.gap;
     const x = layout.boardX + position.col * step;
     const y = layout.boardY + position.row * step;
     const particles = createParticles({
       x,
       y,
       size: layout.cellSize - GEM_CELL_PADDING_PX * 2,
+      count: particlesPerBurst,
       random,
     });
     particles.forEach((particle) => {
-      const normalizer = layout.boardSize;
+      const velocityXInCellStepsPerSecond = particle.vx * launchSpeedScale;
+      const velocityYInCellStepsPerSecond = particle.vy * launchSpeedScale;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.centerX] =
         (particle.x - layout.boardX) / normalizer;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.centerY] =
@@ -157,24 +191,43 @@ export const packFragmentBursts = (
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.size] =
         particle.size / normalizer;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.velocityX] =
-        particle.vx / normalizer;
+        velocityXInCellStepsPerSecond * cellStepInBoardUnits;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.velocityY] =
-        particle.vy / normalizer;
-      values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.rotation] =
-        particle.rotation;
-      values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.rotationSpeed] =
-        particle.rotationSpeed;
+        velocityYInCellStepsPerSecond * cellStepInBoardUnits;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.spawnedAt] = spawnedAt;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.gemType] =
         gemTypeIndex(gem.type);
-      values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.lifetime] =
-        TIMING_CONFIG.particleLifetime;
+      values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.lifetime] = lifetime;
       values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.gravity] =
-        0.5 / normalizer;
+        gravityInBoardUnitsPerSecondSquared;
+      values[descriptorOffset + FRAGMENT_INSTANCE_LAYOUT.mass] = particle.mass;
       descriptorOffset += FRAGMENT_INSTANCE_STRIDE;
     });
   });
   return values;
+};
+
+const descriptorOffsets = (data: Float32Array<ArrayBuffer>): number[] =>
+  Array.from(
+    { length: data.length / FRAGMENT_INSTANCE_STRIDE },
+    (_, index) => index * FRAGMENT_INSTANCE_STRIDE,
+  );
+
+const retainNewestOffsets = (
+  offsets: readonly number[],
+  maximumCount: number,
+): readonly number[] => (maximumCount <= 0 ? [] : offsets.slice(-maximumCount));
+
+const appendDescriptors = (
+  target: number[],
+  data: Float32Array<ArrayBuffer>,
+  offsets: readonly number[],
+): void => {
+  offsets.forEach((offset) => {
+    for (let index = 0; index < FRAGMENT_INSTANCE_STRIDE; index += 1) {
+      target.push(data[offset + index] ?? 0);
+    }
+  });
 };
 
 export const mergeActiveFragments = (
@@ -182,7 +235,7 @@ export const mergeActiveFragments = (
   additions: Float32Array<ArrayBuffer>,
   now: number,
 ): Float32Array<ArrayBuffer> => {
-  const kept: number[] = [];
+  const activeOffsets: number[] = [];
   for (
     let offset = 0;
     offset < active.length;
@@ -191,17 +244,53 @@ export const mergeActiveFragments = (
     const spawnedAt = active[offset + FRAGMENT_INSTANCE_LAYOUT.spawnedAt] ?? 0;
     const lifetime = active[offset + FRAGMENT_INSTANCE_LAYOUT.lifetime] ?? 0;
     if (now - spawnedAt < lifetime) {
-      for (let index = 0; index < FRAGMENT_INSTANCE_STRIDE; index += 1) {
-        kept.push(active[offset + index] ?? 0);
-      }
+      activeOffsets.push(offset);
     }
   }
-  kept.push(...additions);
-  return new Float32Array(kept);
+
+  const maximumCount = GPU_PARTICLE_CONFIG.maximumActiveInstances;
+  const retainedAdditionOffsets = retainNewestOffsets(
+    descriptorOffsets(additions),
+    maximumCount,
+  );
+  const retainedActiveOffsets = retainNewestOffsets(
+    activeOffsets,
+    maximumCount - retainedAdditionOffsets.length,
+  );
+  const merged: number[] = [];
+  appendDescriptors(merged, active, retainedActiveOffsets);
+  appendDescriptors(merged, additions, retainedAdditionOffsets);
+  return new Float32Array(merged);
 };
 
 export const fragmentCount = (data: Float32Array<ArrayBuffer>): number =>
   data.length / FRAGMENT_INSTANCE_STRIDE;
+
+export const fragmentBurstExpiries = (
+  data: Float32Array<ArrayBuffer>,
+): number[] => {
+  const expiries = new Map<string, number>();
+  for (
+    let offset = 0;
+    offset < data.length;
+    offset += FRAGMENT_INSTANCE_STRIDE
+  ) {
+    const centerX = data[offset + FRAGMENT_INSTANCE_LAYOUT.centerX] ?? 0;
+    const centerY = data[offset + FRAGMENT_INSTANCE_LAYOUT.centerY] ?? 0;
+    const spawnedAt = data[offset + FRAGMENT_INSTANCE_LAYOUT.spawnedAt] ?? 0;
+    const gemType = data[offset + FRAGMENT_INSTANCE_LAYOUT.gemType] ?? 0;
+    const lifetime = data[offset + FRAGMENT_INSTANCE_LAYOUT.lifetime] ?? 0;
+    const burstKey = `${centerX}:${centerY}:${spawnedAt}:${gemType}`;
+    expiries.set(
+      burstKey,
+      Math.max(
+        expiries.get(burstKey) ?? Number.NEGATIVE_INFINITY,
+        spawnedAt + lifetime,
+      ),
+    );
+  }
+  return [...expiries.values()];
+};
 
 export const burstKeyForPosition = (position: Position): string =>
   positionKey(position);

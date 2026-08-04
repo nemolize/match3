@@ -68,6 +68,7 @@ const REQUIRED_WEBGPU_PASSES = [
   "composite",
   "fragments",
   "gemRefraction",
+  "waveSimulation",
 ];
 
 const canonicalJson = (value) => {

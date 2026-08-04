@@ -1,5 +1,6 @@
 import { GPU_PARTICLE_CONFIG } from "@/config/particles";
 import { TIMING_CONFIG } from "@/config/timing";
+import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
 import { GEM_CELL_PADDING_PX } from "@/constants/game";
 import { STANDARD_GRAVITY_ACCELERATION } from "@/constants/physics";
 import type { Gem, GemType, Position } from "@/types/game";
@@ -112,6 +113,43 @@ export interface FragmentBurst {
   position: Position;
 }
 
+export const WAVE_IMPULSE_STRIDE = 4;
+
+const cellCenterUv = (
+  position: Position,
+  layout: BoardLayout,
+): readonly [number, number] => {
+  const step = layout.cellSize + layout.gap;
+  return [
+    (layout.boardX + position.col * step + layout.cellSize * 0.5) /
+      layout.canvasWidth,
+    (layout.boardY + position.row * step + layout.cellSize * 0.5) /
+      layout.canvasHeight,
+  ];
+};
+
+export const packWaveImpulses = (
+  bursts: readonly FragmentBurst[],
+  layout: BoardLayout,
+): Float32Array<ArrayBuffer> => {
+  const retainedBursts = bursts.slice(-WAVE_SIMULATION_CONFIG.maximumImpulses);
+  const values = new Float32Array(retainedBursts.length * WAVE_IMPULSE_STRIDE);
+  const radius =
+    (layout.cellSize * 0.34) /
+    Math.max(layout.canvasWidth, layout.canvasHeight);
+
+  retainedBursts.forEach(({ position }, index) => {
+    const offset = index * WAVE_IMPULSE_STRIDE;
+    const [centerX, centerY] = cellCenterUv(position, layout);
+    values[offset] = centerX;
+    values[offset + 1] = centerY;
+    values[offset + 2] = WAVE_SIMULATION_CONFIG.impulseAmplitude;
+    values[offset + 3] = radius;
+  });
+
+  return values;
+};
+
 const particleCountPerBurst = (burstCount: number): number =>
   Math.min(
     GPU_PARTICLE_CONFIG.instancesPerGem,
@@ -122,7 +160,13 @@ export const collectNewFragmentBursts = (
   scene: BoardSceneUpdate,
   previousMatchKey: string,
 ): { bursts: FragmentBurst[]; matchKey: string } => {
-  const positions = scene.matches.flatMap((match) => match.positions);
+  const positions = [
+    ...new Map(
+      scene.matches
+        .flatMap((match) => match.positions)
+        .map((position) => [positionKey(position), position]),
+    ).values(),
+  ];
   if (positions.length === 0) return { bursts: [], matchKey: "" };
 
   const bursts = positions.flatMap((position) => {

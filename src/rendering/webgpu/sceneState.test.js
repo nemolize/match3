@@ -5,6 +5,7 @@ import {
   GPU_PARTICLE_CONFIG,
 } from "@/config/particles";
 import { TIMING_CONFIG } from "@/config/timing";
+import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
 import { GEM_CELL_PADDING_PX } from "@/constants/game";
 import {
   REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND,
@@ -24,6 +25,8 @@ import {
   mergeActiveFragments,
   packFragmentBursts,
   packGemScene,
+  packWaveImpulses,
+  WAVE_IMPULSE_STRIDE,
 } from "./sceneState";
 
 const gem = (id, type, row, col, extra = {}) => ({
@@ -156,6 +159,97 @@ describe("WebGPU scene packing", () => {
 
     expect(first.bursts).toHaveLength(1);
     expect(duplicate.bursts).toHaveLength(0);
+  });
+
+  test("emits one burst for a cell shared by crossing matches", () => {
+    const board = emptyBoard();
+    const positions = [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+      { row: 0, col: 2 },
+      { row: 1, col: 1 },
+      { row: 2, col: 1 },
+    ];
+    positions.forEach((position, index) => {
+      board[position.row][position.col] = gem(
+        `cross-${index}`,
+        "green",
+        position.row,
+        position.col,
+      );
+    });
+
+    const collected = collectNewFragmentBursts(
+      scene(board, {
+        matches: [
+          { positions: positions.slice(0, 3), score: 30, type: "green" },
+          {
+            positions: [positions[1], positions[3], positions[4]],
+            score: 30,
+            type: "green",
+          },
+        ],
+      }),
+      "",
+    );
+
+    expect(collected.bursts).toHaveLength(5);
+    expect(new Set(collected.bursts.map(({ key }) => key)).size).toBe(5);
+  });
+
+  test("packs cleared cell centers as wave impulses", () => {
+    const layout = {
+      canvasHeight: 416,
+      canvasWidth: 416,
+      boardSize: 384,
+      boardX: 16,
+      boardY: 16,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    };
+    const descriptor = packWaveImpulses(
+      [
+        {
+          gem: gem("a", "purple", 1, 2),
+          key: "a",
+          position: { row: 1, col: 2 },
+        },
+      ],
+      layout,
+    );
+
+    expect(descriptor).toHaveLength(WAVE_IMPULSE_STRIDE);
+    expect(descriptor[0]).toBeCloseTo(135.25 / 416);
+    expect(descriptor[1]).toBeCloseTo(86.75 / 416);
+    expect(descriptor[2]).toBeCloseTo(0.075);
+    expect(descriptor[3]).toBeCloseTo((44.5 * 0.34) / 416);
+  });
+
+  test("caps wave impulses at configured capacity and keeps the newest", () => {
+    const bursts = Array.from(
+      { length: WAVE_SIMULATION_CONFIG.maximumImpulses + 2 },
+      (_, index) => ({
+        gem: gem(`gem-${index}`, "blue", index % 8, index % 8),
+        key: `gem-${index}`,
+        position: { row: index % 8, col: index % 8 },
+      }),
+    );
+    const descriptor = packWaveImpulses(bursts, {
+      canvasHeight: 400,
+      canvasWidth: 400,
+      boardSize: 384,
+      boardX: 8,
+      boardY: 8,
+      cellSize: 44.5,
+      devicePixelRatio: 1,
+      gap: 4,
+    });
+
+    expect(descriptor).toHaveLength(
+      WAVE_SIMULATION_CONFIG.maximumImpulses * WAVE_IMPULSE_STRIDE,
+    );
+    expect(descriptor[0]).toBeCloseTo((8 + 2 * 48.5 + 22.25) / 400);
   });
 
   test("packs deterministic fragment descriptors from an injected random source", () => {

@@ -1,26 +1,28 @@
 import { describe, expect, test } from "vitest";
 
-import { backgroundShader, fragmentShader, gemShader } from "./shaders";
+import {
+  backgroundShader,
+  fragmentShader,
+  gemShader,
+  waveSimulationShader,
+} from "./shaders";
 
 describe("background shader", () => {
-  test("refracts the sand through an animated water surface", () => {
+  test("refracts the sand through the simulated water surface", () => {
     expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
+    expect(backgroundShader).toContain("var waveTexture: texture_2d<f32>;");
     expect(backgroundShader).toContain(
-      "fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface",
+      "fn sampleWaterSurface(uv: vec2f) -> WaterSurface",
     );
     expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
-    expect(backgroundShader).toContain("const WATER_FEATURE_SCALE: f32 = 2.0;");
     expect(backgroundShader).toContain("const SAND_FEATURE_SCALE: f32 = 2.0;");
     expect(backgroundShader).toContain(
       "const CAUSTIC_FEATURE_SCALE: f32 = 0.75;",
     );
-    expect(backgroundShader).toContain("0.38 * WATER_FEATURE_SCALE");
-    expect(backgroundShader).toContain("0.012 * WATER_FEATURE_SCALE");
-    expect(backgroundShader).toContain("0.055,");
-    expect(backgroundShader).toContain("0.0018,");
     expect(backgroundShader).toContain(
-      "return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);",
+      "let energy = abs(state.y) + length(state.zw) * 0.5;",
     );
+    expect(backgroundShader).toContain("normalize(vec3f(-gradient, 1.0))");
     expect(backgroundShader).toContain("AIR_IOR / WATER_IOR");
     expect(backgroundShader).toContain("let refractionDirection = refract(");
     expect(backgroundShader).toContain(
@@ -30,6 +32,19 @@ describe("background shader", () => {
       "(uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset",
     );
     expect(backgroundShader).toContain("sandSampler,\n    sandUv");
+  });
+
+  test("highlights simulated displacement and wave energy", () => {
+    expect(backgroundShader).toContain(
+      "smoothstep(0.001, 0.02, waterSurface.energy)",
+    );
+    expect(backgroundShader).toContain(
+      "let displacedWater = smoothstep(0.0025, 0.018, abs(waterSurface.height));",
+    );
+    expect(backgroundShader).toContain(
+      "(wavefront * 0.34 + displacedWater * 0.16) *",
+    );
+    expect(backgroundShader.match(/textureLoad\(/g)).toHaveLength(4);
   });
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
@@ -84,6 +99,35 @@ describe("background shader", () => {
       "let light = caustic(causticUv, time * 1.8)",
     );
     expect(backgroundShader).toContain("const BUBBLE_COUNT: i32 = 0;");
+  });
+});
+
+describe("wave simulation shader", () => {
+  test("advances a damped finite-difference wave field", () => {
+    expect(waveSimulationShader).toContain("@compute @workgroup_size(8, 8)");
+    expect(waveSimulationShader).toContain("let laplacian =");
+    expect(waveSimulationShader).toContain("laplacian * WAVE_SPEED");
+    expect(waveSimulationShader).toContain(
+      "state.y * pow(VELOCITY_DAMPING, deltaFrames)",
+    );
+    expect(waveSimulationShader).toContain(
+      "vec4f(nextHeight, nextVelocity, surfaceGradient)",
+    );
+    expect(waveSimulationShader).toContain(
+      "let surfaceGradient = vec2f(right - left, top - bottom);",
+    );
+  });
+
+  test("injects clear ripples and absorbs wave energy at the edges", () => {
+    expect(waveSimulationShader).toContain(
+      "@group(0) @binding(3) var<storage, read> impulses: array<vec4f>;",
+    );
+    expect(waveSimulationShader).toContain(
+      "impulseVelocity += impulse.z * exp(-distanceSquared * 2.4);",
+    );
+    expect(waveSimulationShader).toContain(
+      "mix(0.9, 1.0, smoothstep(0.0, 0.08, edgeDistance))",
+    );
   });
 });
 

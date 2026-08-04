@@ -206,6 +206,7 @@ describe("comparePerformanceReports", () => {
               ? { durationNs: 0, sampleCount: 0, status: "inactive" }
               : { durationNs: 10, sampleCount: 1 },
           gemRefraction: { durationNs: 10, sampleCount: 1 },
+          waveSimulation: { durationNs: 10, sampleCount: 1 },
         },
         supported: true,
         timestampPeriodNs: 1,

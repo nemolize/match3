@@ -4,6 +4,7 @@ import {
   createBoardRenderer,
   createGemPipeline,
   gemBlendState,
+  resolveWaveSubstepDeltaFrames,
 } from "./createBoardRenderer";
 
 const canvas = {
@@ -18,6 +19,12 @@ const environment = (gpu) => ({
 });
 
 describe("WebGPU renderer initialization", () => {
+  test("splits delayed wave frames into stable substeps without dropping time", () => {
+    expect(resolveWaveSubstepDeltaFrames(1)).toEqual([1]);
+    expect(resolveWaveSubstepDeltaFrames(2)).toEqual([1, 1]);
+    expect(resolveWaveSubstepDeltaFrames(3)).toEqual([1.5, 1.5]);
+  });
+
   test("uses premultiplied source-over blending for gems", () => {
     expect(gemBlendState).toEqual({
       alpha: {

@@ -1,3 +1,4 @@
+import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
 import { REFERENCE_FRAGMENT_DRAG_RATE_PER_SECOND } from "@/constants/physics";
 
 import { fragmentInstanceStruct, gemInstanceStruct } from "./instanceLayout";
@@ -47,14 +48,15 @@ ${frameUniformStruct}
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var sandSampler: sampler;
 @group(0) @binding(2) var sandTexture: texture_2d<f32>;
+@group(0) @binding(3) var waveTexture: texture_2d<f32>;
 
 const AIR_IOR: f32 = 1.000293;
 const WATER_IOR: f32 = 1.333;
-const TAU: f32 = 6.28318530718;
-const WATER_FEATURE_SCALE: f32 = 2.0;
 const SAND_FEATURE_SCALE: f32 = 2.0;
 const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
+const LIGHT_RAY_FEATURE_SCALE: f32 = 2.0;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
+const WAVE_NORMAL_STRENGTH: f32 = 34.0;
 const MEAN_WATER_DEPTH: f32 = 0.25;
 const WATER_RAY_INTENSITY: f32 = 0.045;
 const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
@@ -66,6 +68,7 @@ const BUBBLE_COUNT: i32 = 0;
 struct WaterSurface {
   normal: vec3f,
   height: f32,
+  energy: f32,
 }
 
 @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
@@ -85,63 +88,45 @@ fn hash(seed: f32) -> f32 {
   return fract(sin(seed * 12.9898) * 43758.5453);
 }
 
-fn directionalWaveSample(
-  uv: vec2f,
-  direction: vec2f,
-  wavelength: f32,
-  amplitude: f32,
-  speed: f32,
-  time: f32
-) -> vec3f {
-  let waveNumber = TAU / wavelength;
-  let phase = dot(uv, direction) * waveNumber + time * speed;
-  let gradient = direction * (amplitude * waveNumber * cos(phase));
-  return vec3f(gradient, amplitude * sin(phase));
+fn waveStateAtUv(uv: vec2f) -> vec4f {
+  let dimensions = vec2f(textureDimensions(waveTexture));
+  let samplePosition =
+    clamp(uv, vec2f(0.0), vec2f(1.0)) * (dimensions - vec2f(1.0));
+  let base = vec2i(floor(samplePosition));
+  let blend = fract(samplePosition);
+  let maximum = vec2i(dimensions) - vec2i(1);
+  let bottomLeft = textureLoad(waveTexture, clamp(base, vec2i(0), maximum), 0);
+  let bottomRight = textureLoad(
+    waveTexture,
+    clamp(base + vec2i(1, 0), vec2i(0), maximum),
+    0
+  );
+  let topLeft = textureLoad(
+    waveTexture,
+    clamp(base + vec2i(0, 1), vec2i(0), maximum),
+    0
+  );
+  let topRight = textureLoad(
+    waveTexture,
+    clamp(base + vec2i(1, 1), vec2i(0), maximum),
+    0
+  );
+  return mix(
+    mix(bottomLeft, bottomRight, blend.x),
+    mix(topLeft, topRight, blend.x),
+    blend.y
+  );
 }
 
-fn sampleWaterSurface(uv: vec2f, time: f32) -> WaterSurface {
-  let wave =
-    directionalWaveSample(
-      uv,
-      normalize(vec2f(0.82, 0.57)),
-      0.38 * WATER_FEATURE_SCALE,
-      0.012 * WATER_FEATURE_SCALE,
-      0.85,
-      time
-    ) +
-    directionalWaveSample(
-      uv,
-      normalize(vec2f(-0.36, 0.93)),
-      0.23 * WATER_FEATURE_SCALE,
-      0.006 * WATER_FEATURE_SCALE,
-      -1.15,
-      time
-    ) +
-    directionalWaveSample(
-      uv,
-      normalize(vec2f(0.96, -0.28)),
-      0.14 * WATER_FEATURE_SCALE,
-      0.0025 * WATER_FEATURE_SCALE,
-      1.65,
-      time
-    ) +
-    directionalWaveSample(
-      uv,
-      normalize(vec2f(-0.91, 0.41)),
-      0.055,
-      0.0018,
-      2.8,
-      time
-    ) +
-    directionalWaveSample(
-      uv,
-      normalize(vec2f(0.28, 0.96)),
-      0.032,
-      0.0008,
-      -4.1,
-      time
-    );
-  return WaterSurface(normalize(vec3f(-wave.xy, 1.0)), wave.z);
+fn sampleWaterSurface(uv: vec2f) -> WaterSurface {
+  let state = waveStateAtUv(uv);
+  let gradient = state.zw * WAVE_NORMAL_STRENGTH;
+  let energy = abs(state.y) + length(state.zw) * 0.5;
+  return WaterSurface(
+    normalize(vec3f(-gradient, 1.0)),
+    state.x,
+    energy
+  );
 }
 
 fn fresnelDielectric(cosineIncident: f32, incidentIor: f32, transmittedIor: f32) -> f32 {
@@ -175,7 +160,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / (frame.canvas * frame.devicePixelRatio);
   let time = select(frame.waterTimeMs * 0.001, 0.0, frame.reducedMotion > 0.5);
-  let waterSurface = sampleWaterSurface(uv, time);
+  let waterSurface = sampleWaterSurface(uv);
   let surfaceNormal = waterSurface.normal;
   let viewDirection = vec3f(0.0, 0.0, 1.0);
   let incidentDirection = -viewDirection;
@@ -216,12 +201,12 @@ fn sampleSky(direction: vec3f) -> vec3f {
     (vec3f(1.0) - transmittance);
   var transmission = sand * transmittance + inscattering;
   let rays = pow(
-    max(0.0, sin(uv.x * (18.0 / WATER_FEATURE_SCALE) + time * 0.35)),
+    max(0.0, sin(uv.x * (18.0 / LIGHT_RAY_FEATURE_SCALE) + time * 0.35)),
     14.0
   ) * WATER_RAY_INTENSITY;
   let causticUv =
     vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
-  let light = caustic(causticUv, time * 1.8) * 0.34;
+  let light = caustic(causticUv, time * 1.8) * 0.2;
   transmission +=
     WATER_LIGHT_COLOR * (rays + light) * transmittance;
 
@@ -233,6 +218,11 @@ fn sampleSky(direction: vec3f) -> vec3f {
     WATER_IOR
   );
   var color = mix(transmission, reflection, fresnel);
+  let wavefront = smoothstep(0.001, 0.02, waterSurface.energy);
+  let displacedWater = smoothstep(0.0025, 0.018, abs(waterSurface.height));
+  color += WATER_LIGHT_COLOR *
+    (wavefront * 0.34 + displacedWater * 0.16) *
+    transmittance;
   for (var index = 0; index < BUBBLE_COUNT; index += 1) {
     let seed = f32(index);
     let center = vec2f(
@@ -246,6 +236,85 @@ fn sampleSky(direction: vec3f) -> vec3f {
     color += vec3f(0.42, 0.82, 0.92) * ring * 0.32;
   }
   return vec4f(color, 1.0);
+}
+`;
+
+export const waveSimulationShader = /* wgsl */ `
+struct WaveStep {
+  timeSeconds: f32,
+  deltaFrames: f32,
+  impulseCount: f32,
+  padding: f32,
+}
+
+@group(0) @binding(0) var inputWave: texture_2d<f32>;
+@group(0) @binding(1) var outputWave: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var<uniform> step: WaveStep;
+@group(0) @binding(3) var<storage, read> impulses: array<vec4f>;
+
+const TAU: f32 = 6.28318530718;
+const MAX_IMPULSES: u32 = ${WAVE_SIMULATION_CONFIG.maximumImpulses}u;
+const WAVE_SPEED: f32 = 0.18;
+const VELOCITY_DAMPING: f32 = 0.986;
+
+fn waveStateAt(cell: vec2i, dimensions: vec2i) -> vec2f {
+  return textureLoad(
+    inputWave,
+    clamp(cell, vec2i(0), dimensions - vec2i(1)),
+    0
+  ).rg;
+}
+
+@compute @workgroup_size(${WAVE_SIMULATION_CONFIG.workgroupSize}, ${WAVE_SIMULATION_CONFIG.workgroupSize})
+fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
+  let dimensions = textureDimensions(inputWave);
+  if (any(invocation.xy >= dimensions)) { return; }
+
+  let cell = vec2i(invocation.xy);
+  let integerDimensions = vec2i(dimensions);
+  let state = waveStateAt(cell, integerDimensions);
+  let height = state.x;
+  let left = waveStateAt(cell + vec2i(-1, 0), integerDimensions).x;
+  let right = waveStateAt(cell + vec2i(1, 0), integerDimensions).x;
+  let bottom = waveStateAt(cell + vec2i(0, -1), integerDimensions).x;
+  let top = waveStateAt(cell + vec2i(0, 1), integerDimensions).x;
+  let laplacian = left + right + bottom + top - 4.0 * height;
+  let surfaceGradient = vec2f(right - left, top - bottom);
+  let uv = (vec2f(invocation.xy) + vec2f(0.5)) / vec2f(dimensions);
+  let deltaFrames = clamp(
+    step.deltaFrames,
+    0.0,
+    ${WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames}
+  );
+  let ambientForce =
+    sin(dot(uv, normalize(vec2f(0.82, 0.57))) * TAU * 2.2 - step.timeSeconds * 1.05) * 0.000004 +
+    sin(dot(uv, normalize(vec2f(-0.36, 0.93))) * TAU * 3.7 + step.timeSeconds * 1.38) * 0.000003;
+  var impulseVelocity = 0.0;
+  let impulseCount = min(u32(step.impulseCount), MAX_IMPULSES);
+  for (var index = 0u; index < impulseCount; index += 1u) {
+    let impulse = impulses[index];
+    let normalizedDistance = distance(uv, impulse.xy) / max(impulse.w, 0.001);
+    let distanceSquared = normalizedDistance * normalizedDistance;
+    impulseVelocity += impulse.z * exp(-distanceSquared * 2.4);
+  }
+
+  let edgeDistance = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  let edgeDamping = mix(0.9, 1.0, smoothstep(0.0, 0.08, edgeDistance));
+  let nextVelocity = (
+    state.y * pow(VELOCITY_DAMPING, deltaFrames) +
+    (laplacian * WAVE_SPEED + ambientForce) * deltaFrames +
+    impulseVelocity
+  ) * edgeDamping;
+  let nextHeight = clamp(
+    height + nextVelocity * deltaFrames,
+    -0.16,
+    0.16
+  );
+  textureStore(
+    outputWave,
+    cell,
+    vec4f(nextHeight, nextVelocity, surfaceGradient)
+  );
 }
 `;
 

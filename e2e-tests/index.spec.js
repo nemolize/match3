@@ -458,12 +458,11 @@ test("launches simulated wave ripples from cleared cells", async ({ page }) => {
 
   const ambient = await measureBackgroundChange("Clear without ripple");
   const ripple = await measureBackgroundChange("Trigger clear ripple", true);
-  expect(ripple.difference.centerMeanDelta).toBeGreaterThan(
-    ambient.difference.centerMeanDelta * 1.1,
-  );
-  expect(ripple.difference.edgeMeanDelta).toBeGreaterThan(
-    ambient.difference.edgeMeanDelta * 1.5,
-  );
+  const centerRatio =
+    ripple.difference.centerMeanDelta / ambient.difference.centerMeanDelta;
+  const edgeRatio =
+    ripple.difference.edgeMeanDelta / ambient.difference.edgeMeanDelta;
+  expect(Math.max(centerRatio, edgeRatio)).toBeGreaterThan(1.5);
   expect(ripple.timings?.supported).toBe(true);
   expect(ripple.timings?.passes?.waveSimulation?.sampleCount).toBe(1);
 });

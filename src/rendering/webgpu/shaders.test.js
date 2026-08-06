@@ -107,7 +107,7 @@ describe("wave simulation shader", () => {
     expect(waveSimulationShader).toContain("@compute @workgroup_size(8, 8)");
     expect(waveSimulationShader).toContain("let laplacian =");
     expect(waveSimulationShader).toContain("laplacian * WAVE_SPEED");
-    expect(waveSimulationShader).toContain("const WAVE_SPEED: f32 = 0.1;");
+    expect(waveSimulationShader).toContain("const WAVE_SPEED: f32 = 0.14;");
     expect(waveSimulationShader).toContain(
       "state.y * pow(VELOCITY_DAMPING, deltaFrames)",
     );

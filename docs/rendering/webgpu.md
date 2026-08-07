@@ -6,23 +6,31 @@ transparent DOM grid for pointer, keyboard, focus, and accessibility semantics.
 
 ## Render graph
 
-Each frame is submitted as one command buffer with four ordered render passes:
+Each frame is submitted as one command buffer with four ordered render passes.
+When motion is enabled, they are preceded by a wave-simulation stage of one to
+three compute substep passes:
 
-1. `backgroundCaustics` refracts the sand through analytical wave heights and
+1. `waveSimulation` advances persistent 64x64 ping-pong wave textures. Gem
+   clears inject cell-centered velocity impulses, and bounded substeps preserve
+   stability without dropping elapsed time.
+2. `backgroundCaustics` refracts the sand through the simulated wave height and
    normals, applies depth-modulated Beer-Lambert extinction, single scattering,
    and caustics, then blends a reflected sky using dielectric Fresnel into
    `background-color`.
-2. `gemRefraction` copies that attachment to `scene-color`, then draws packed
+3. `gemRefraction` copies that attachment to `scene-color`, then draws packed
    gem instances. This pass is the layer-interaction boundary for future
    background sampling and optical materials.
-3. `fragments` loads `scene-color` and draws absolute-time ballistic fragment
+4. `fragments` loads `scene-color` and draws absolute-time ballistic fragment
    instances.
-4. `composite` samples `scene-color` into the current presentation texture.
+5. `composite` samples `scene-color` into the current presentation texture.
 
-The two intermediate textures prevent a pass from sampling the attachment it is
-writing. A future fluid implementation should add ping-pong state textures
-before `backgroundCaustics` and bind the resulting displacement/normal texture
-in `composite`; the gameplay and semantic DOM contracts do not need to change.
+The two intermediate color textures prevent a pass from sampling the attachment
+it is writing. The wave state textures are separate storage textures; the
+background pass samples the latest state directly.
+
+`gridCoupling` is the finite-difference coupling in simulation-cell space, not
+a resolution-independent screen-space speed. The 64x64 resolution is therefore
+part of the propagation tuning as well as the fidelity and GPU-cost tradeoff.
 
 Renderer resources are persistent. Frame uniforms are uploaded every frame,
 gem instances only when the board snapshot changes, fragment instances only
@@ -31,8 +39,8 @@ when bursts start or expire, and dimension-dependent textures only on resize.
 ## Time and deterministic state
 
 - Water uses an accumulated clock with frame deltas clamped to 50 ms, so it
-  does not jump after a background-tab stall. It freezes at a stable frame for
-  reduced motion.
+  does not jump after a background-tab stall. Entering reduced motion clears
+  the wave state so motion does not remain frozen onscreen or resume later.
 - Gem transitions retain identity by gem ID and evaluate swap/drop descriptors
   from absolute time.
 - Fragment descriptors reuse the seeded CPU initializer in
@@ -51,7 +59,7 @@ diagnostic. Device loss is terminal for this PoC; recovery would require
 recreating every device-owned resource from CPU shadow state.
 
 When `timestamp-query` is available, the renderer implements
-`globalThis.__match3RendererPerformance` for the four pass names above. Hardware
+`globalThis.__match3RendererPerformance` for the five pass names above. Hardware
 performance claims must use the versioned `hardware-gpu` profile and the
 compatible baseline selected in `performance-baselines/index.json`. The
 `cpu-stress` profile permits its declared SwiftShader adapter for functional

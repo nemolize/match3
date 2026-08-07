@@ -102,7 +102,7 @@ const createReport = (id) => {
       burst: createScenario(600),
       idle: createScenario(3000),
     },
-    schemaVersion: 2,
+    schemaVersion: 3,
     source: {
       dirty: false,
       revision: "abc123",
@@ -176,15 +176,49 @@ describe("comparePerformanceReports", () => {
     );
     for (const scenario of Object.values(baseline.scenarios)) {
       scenario.gpuTimings = scenario.gpuTimings.map(() => ({
-        passes: {},
+        passes: {
+          backgroundCaustics: { durationNs: 10, sampleCount: 1 },
+          composite: { durationNs: 10, sampleCount: 1 },
+          fragments: { durationNs: 10, sampleCount: 1 },
+          gemRefraction: { durationNs: 10, sampleCount: 1 },
+        },
         supported: true,
         timestampPeriodNs: 1,
       }));
     }
 
     expect(() => comparePerformanceReports(baseline, baseline)).toThrow(
-      /backgroundCaustics/,
+      /waveSimulation/,
     );
+  });
+
+  it("accepts schema 2 WebGPU reports without wave simulation timings", () => {
+    const report = createReport("legacy-webgpu");
+    report.schemaVersion = 2;
+    report.renderers.background = "webgpu";
+    report.environment.webGpu.adapter = {
+      features: ["timestamp-query"],
+    };
+    report.environment.fingerprint = createEnvironmentFingerprint(
+      report.environment,
+    );
+    for (const [scenarioName, scenario] of Object.entries(report.scenarios)) {
+      scenario.gpuTimings = scenario.gpuTimings.map(() => ({
+        passes: {
+          backgroundCaustics: { durationNs: 10, sampleCount: 1 },
+          composite: { durationNs: 10, sampleCount: 1 },
+          fragments:
+            scenarioName === "idle"
+              ? { durationNs: 0, sampleCount: 0, status: "inactive" }
+              : { durationNs: 10, sampleCount: 1 },
+          gemRefraction: { durationNs: 10, sampleCount: 1 },
+        },
+        supported: true,
+        timestampPeriodNs: 1,
+      }));
+    }
+
+    expect(comparePerformanceReports(report, report).passed).toBe(true);
   });
 
   it("allows an explicitly inactive fragment pass during idle", () => {
@@ -206,6 +240,7 @@ describe("comparePerformanceReports", () => {
               ? { durationNs: 0, sampleCount: 0, status: "inactive" }
               : { durationNs: 10, sampleCount: 1 },
           gemRefraction: { durationNs: 10, sampleCount: 1 },
+          waveSimulation: { durationNs: 10, sampleCount: 1 },
         },
         supported: true,
         timestampPeriodNs: 1,

@@ -1,3 +1,4 @@
+import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
 import { BOARD_SIZE } from "@/constants/game";
 
 import {
@@ -10,12 +11,15 @@ import {
   mergeActiveFragments,
   packFragmentBursts,
   packGemScene,
+  packWaveImpulses,
+  WAVE_IMPULSE_STRIDE,
 } from "./sceneState";
 import {
   backgroundShader,
   blitShader,
   fragmentShader,
   gemShader,
+  waveSimulationShader,
 } from "./shaders";
 import type {
   BoardLayout,
@@ -30,15 +34,69 @@ import type {
 const FRAME_UNIFORM_BYTES = 64;
 const MAX_GEMS = BOARD_SIZE * BOARD_SIZE;
 const INITIAL_FRAGMENT_CAPACITY = 128;
-const TIMING_QUERY_COUNT = 8;
 const MAX_WATER_FRAME_DELTA_MS = 50;
+const REFERENCE_FRAME_DURATION_MS = 1000 / 60;
+const WAVE_STEP_UNIFORM_BYTES = 16;
+const WAVE_TEXTURE_BYTES_PER_PIXEL = 8;
+const MAX_WAVE_SUBSTEPS = Math.ceil(
+  MAX_WATER_FRAME_DELTA_MS /
+    REFERENCE_FRAME_DURATION_MS /
+    WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
+);
 const SAND_TEXTURE_URL = "/images/beach-sand.webp";
 const PASS_NAMES = [
+  "waveSimulation",
   "backgroundCaustics",
   "gemRefraction",
   "fragments",
   "composite",
 ] as const;
+const TIMING_QUERY_COUNT = PASS_NAMES.length * 2;
+const EMPTY_FLOAT32 = new Float32Array();
+
+export const resolveWaveDeltaFrames = (deltaFrames: number): number =>
+  Math.min(
+    Math.max(0, deltaFrames),
+    MAX_WAVE_SUBSTEPS * WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
+  );
+
+export const resolveWaveSubstepCount = (deltaFrames: number): number =>
+  Math.min(
+    MAX_WAVE_SUBSTEPS,
+    Math.max(
+      1,
+      Math.ceil(
+        resolveWaveDeltaFrames(deltaFrames) /
+          WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
+      ),
+    ),
+  );
+
+export const clearWaveTextures = (
+  queue: GPUQueue,
+  textures: readonly GPUTexture[],
+): void => {
+  const bytesPerRow =
+    WAVE_SIMULATION_CONFIG.resolution * WAVE_TEXTURE_BYTES_PER_PIXEL;
+  const zeroedWaveState = new Uint8Array(
+    bytesPerRow * WAVE_SIMULATION_CONFIG.resolution,
+  );
+  for (const texture of textures) {
+    queue.writeTexture(
+      { texture },
+      zeroedWaveState,
+      {
+        bytesPerRow,
+        rowsPerImage: WAVE_SIMULATION_CONFIG.resolution,
+      },
+      {
+        width: WAVE_SIMULATION_CONFIG.resolution,
+        height: WAVE_SIMULATION_CONFIG.resolution,
+        depthOrArrayLayers: 1,
+      },
+    );
+  }
+};
 
 const createShaderModule = async (
   device: GPUDevice,
@@ -169,13 +227,19 @@ export const createBoardRenderer = async (
     initializationDevice = device;
     const format = gpu.getPreferredCanvasFormat();
     device.pushErrorScope("validation");
-    const [backgroundModule, blitModule, gemModule, fragmentModule] =
-      await Promise.all([
-        createShaderModule(device, backgroundShader, "background-caustics"),
-        createShaderModule(device, blitShader, "composite-blit"),
-        createShaderModule(device, gemShader, "gem-refraction"),
-        createShaderModule(device, fragmentShader, "fragments"),
-      ]);
+    const [
+      backgroundModule,
+      blitModule,
+      gemModule,
+      fragmentModule,
+      waveSimulationModule,
+    ] = await Promise.all([
+      createShaderModule(device, backgroundShader, "background-caustics"),
+      createShaderModule(device, blitShader, "composite-blit"),
+      createShaderModule(device, gemShader, "gem-refraction"),
+      createShaderModule(device, fragmentShader, "fragments"),
+      createShaderModule(device, waveSimulationShader, "wave-simulation"),
+    ]);
 
     const backgroundPipeline = createPipeline(
       device,
@@ -199,6 +263,11 @@ export const createBoardRenderer = async (
       alphaBlend,
       "fragments",
     );
+    const waveSimulationPipeline = device.createComputePipeline({
+      label: "wave-simulation",
+      layout: "auto",
+      compute: { module: waveSimulationModule, entryPoint: "computeMain" },
+    });
 
     const uniformBuffer = device.createBuffer({
       label: "board-frame-uniform",
@@ -219,6 +288,56 @@ export const createBoardRenderer = async (
         Float32Array.BYTES_PER_ELEMENT,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
     });
+    const waveStepBuffers = Array.from(
+      { length: MAX_WAVE_SUBSTEPS },
+      (_, index) =>
+        device.createBuffer({
+          label: `wave-step-uniform-${index}`,
+          size: WAVE_STEP_UNIFORM_BYTES,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+        }),
+    );
+    const waveImpulseBuffer = device.createBuffer({
+      label: "wave-impulses",
+      size:
+        WAVE_SIMULATION_CONFIG.maximumImpulses *
+        WAVE_IMPULSE_STRIDE *
+        Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+    });
+    const waveTextures = Array.from({ length: 2 }, (_, index) =>
+      device.createTexture({
+        label: `wave-state-${index}`,
+        size: {
+          width: WAVE_SIMULATION_CONFIG.resolution,
+          height: WAVE_SIMULATION_CONFIG.resolution,
+        },
+        format: "rgba16float",
+        usage:
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.STORAGE_BINDING |
+          GPUTextureUsage.TEXTURE_BINDING,
+      }),
+    );
+    const waveTextureViews = waveTextures.map((texture) =>
+      texture.createView(),
+    );
+    const waveSimulationBindGroups = waveStepBuffers.map((waveStepBuffer) =>
+      waveTextureViews.map((inputView, inputIndex) => {
+        const outputView = waveTextureViews[1 - inputIndex];
+        if (!outputView)
+          throw new Error("A wave output texture is unavailable.");
+        return device.createBindGroup({
+          layout: waveSimulationPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: inputView },
+            { binding: 1, resource: outputView },
+            { binding: 2, resource: { buffer: waveStepBuffer } },
+            { binding: 3, resource: { buffer: waveImpulseBuffer } },
+          ],
+        });
+      }),
+    );
     const sampler = device.createSampler({
       label: "board-linear-sampler",
       magFilter: "linear",
@@ -260,6 +379,7 @@ export const createBoardRenderer = async (
     let animationFrame = 0;
     let lastWaterFrameTime: number | null = null;
     let waterTimeMs = 0;
+    let waveReadIndex = 0;
     let layout: BoardLayout | null = null;
     let scene: BoardSceneUpdate | null = null;
     let previousPositions = new Map<string, { row: number; col: number }>();
@@ -272,6 +392,7 @@ export const createBoardRenderer = async (
       | undefined;
     let gemCount = 0;
     let fragments = new Float32Array();
+    let pendingWaveImpulses = EMPTY_FLOAT32;
     let activeBurstExpiries: number[] = [];
     let nextFragmentExpiry = Number.POSITIVE_INFINITY;
     let backgroundTexture: GPUTexture | null = null;
@@ -287,19 +408,25 @@ export const createBoardRenderer = async (
         { binding: 1, resource: { buffer: fragmentBuffer } },
       ],
     });
-    const frameBindGroup = device.createBindGroup({
-      layout: backgroundPipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: uniformBuffer } },
-        { binding: 1, resource: sampler },
-        { binding: 2, resource: sandTexture.createView() },
-      ],
-    });
+    const sandTextureView = sandTexture.createView();
+    const frameBindGroups = waveTextureViews.map((waveTextureView) =>
+      device.createBindGroup({
+        layout: backgroundPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: sampler },
+          { binding: 2, resource: sandTextureView },
+          { binding: 3, resource: waveTextureView },
+        ],
+      }),
+    );
     let compositeBindGroup: GPUBindGroup | null = null;
     let timingFrameCount = 0;
+    let waveTimingFrameCount = 0;
     let fragmentTimingFrameCount = 0;
     let timingCaptureActive = false;
     const frameUniform = new Float32Array(16);
+    const waveStepUniform = new Float32Array(4);
     const performanceApiRef: {
       current?: Window["__match3RendererPerformance"];
     } = {};
@@ -334,6 +461,9 @@ export const createBoardRenderer = async (
       uniformBuffer.destroy();
       gemBuffer.destroy();
       fragmentBuffer.destroy();
+      waveStepBuffers.forEach((buffer) => buffer.destroy());
+      waveImpulseBuffer.destroy();
+      waveTextures.forEach((texture) => texture.destroy());
       querySet?.destroy();
       queryResolveBuffer?.destroy();
       queryReadBuffer?.destroy();
@@ -342,10 +472,7 @@ export const createBoardRenderer = async (
     };
     device.addEventListener("uncapturederror", handleUncapturedError);
 
-    const timestampWrites = (
-      passIndex: number,
-      active = true,
-    ): GPURenderPassTimestampWrites | undefined =>
+    const timestampWrites = (passIndex: number, active = true) =>
       querySet && timingCaptureActive && active
         ? {
             querySet,
@@ -353,6 +480,20 @@ export const createBoardRenderer = async (
             endOfPassWriteIndex: passIndex * 2 + 1,
           }
         : undefined;
+    const waveTimestampWrites = (
+      substepIndex: number,
+      substepCount: number,
+    ) => {
+      if (!querySet || !timingCaptureActive) return undefined;
+      const isFirstSubstep = substepIndex === 0;
+      const isLastSubstep = substepIndex === substepCount - 1;
+      if (!isFirstSubstep && !isLastSubstep) return undefined;
+      return {
+        querySet,
+        ...(isFirstSubstep ? { beginningOfPassWriteIndex: 0 } : {}),
+        ...(isLastSubstep ? { endOfPassWriteIndex: 1 } : {}),
+      };
+    };
 
     const reportWorkload = () => {
       callbacks.onWorkloadChange?.({
@@ -412,6 +553,7 @@ export const createBoardRenderer = async (
       const collected = collectNewFragmentBursts(scene, previousMatchKey);
       previousMatchKey = collected.matchKey;
       if (scene.reducedMotion || collected.bursts.length === 0) return;
+      pendingWaveImpulses = packWaveImpulses(collected.bursts, layout);
       const additions = packFragmentBursts(
         collected.bursts,
         layout,
@@ -495,7 +637,7 @@ export const createBoardRenderer = async (
       }
 
       if (now >= nextFragmentExpiry) {
-        fragments = mergeActiveFragments(fragments, new Float32Array(), now);
+        fragments = mergeActiveFragments(fragments, EMPTY_FLOAT32, now);
         activeBurstExpiries = fragmentBurstExpiries(fragments);
         nextFragmentExpiry = Math.min(...activeBurstExpiries);
         if (fragments.length > 0) {
@@ -503,17 +645,24 @@ export const createBoardRenderer = async (
         }
         reportWorkload();
       }
-
+      let waveDeltaFrames = 0;
       if (scene.reducedMotion) {
         lastWaterFrameTime = null;
       } else {
         if (lastWaterFrameTime !== null) {
+          const waterFrameDeltaMs = Math.min(
+            Math.max(0, now - lastWaterFrameTime),
+            MAX_WATER_FRAME_DELTA_MS,
+          );
           waterTimeMs = advanceWaterTime(
             waterTimeMs,
             lastWaterFrameTime,
             now,
             MAX_WATER_FRAME_DELTA_MS,
           );
+          waveDeltaFrames = waterFrameDeltaMs / REFERENCE_FRAME_DURATION_MS;
+        } else {
+          waveDeltaFrames = 1;
         }
         lastWaterFrameTime = now;
       }
@@ -536,6 +685,57 @@ export const createBoardRenderer = async (
         device.pushErrorScope("validation");
       }
       const encoder = device.createCommandEncoder({ label: "board-frame" });
+      if (!scene.reducedMotion) {
+        const impulseCount = pendingWaveImpulses.length / WAVE_IMPULSE_STRIDE;
+        if (pendingWaveImpulses.length > 0) {
+          device.queue.writeBuffer(waveImpulseBuffer, 0, pendingWaveImpulses);
+        }
+        const boundedWaveDeltaFrames = resolveWaveDeltaFrames(waveDeltaFrames);
+        const waveSubstepCount = resolveWaveSubstepCount(
+          boundedWaveDeltaFrames,
+        );
+        const waveSubstepDeltaFrames =
+          boundedWaveDeltaFrames / waveSubstepCount;
+        for (
+          let substepIndex = 0;
+          substepIndex < waveSubstepCount;
+          substepIndex += 1
+        ) {
+          const waveStepBuffer = waveStepBuffers[substepIndex];
+          const waveBindGroup =
+            waveSimulationBindGroups[substepIndex]?.[waveReadIndex];
+          if (!waveStepBuffer || !waveBindGroup) return;
+          waveStepUniform[0] = waterTimeMs / 1000;
+          waveStepUniform[1] = waveSubstepDeltaFrames;
+          waveStepUniform[2] = substepIndex === 0 ? impulseCount : 0;
+          device.queue.writeBuffer(waveStepBuffer, 0, waveStepUniform);
+          const wavePass = encoder.beginComputePass({
+            label: `wave-simulation-${substepIndex}`,
+            timestampWrites: waveTimestampWrites(
+              substepIndex,
+              waveSubstepCount,
+            ),
+          });
+          wavePass.setPipeline(waveSimulationPipeline);
+          wavePass.setBindGroup(0, waveBindGroup);
+          wavePass.dispatchWorkgroups(
+            Math.ceil(
+              WAVE_SIMULATION_CONFIG.resolution /
+                WAVE_SIMULATION_CONFIG.workgroupSize,
+            ),
+            Math.ceil(
+              WAVE_SIMULATION_CONFIG.resolution /
+                WAVE_SIMULATION_CONFIG.workgroupSize,
+            ),
+          );
+          wavePass.end();
+          waveReadIndex = 1 - waveReadIndex;
+        }
+        if (timingCaptureActive) waveTimingFrameCount += 1;
+        pendingWaveImpulses = EMPTY_FLOAT32;
+      }
+      const frameBindGroup = frameBindGroups[waveReadIndex];
+      if (!frameBindGroup) return;
       const backgroundPass = encoder.beginRenderPass({
         label: "background-caustics",
         colorAttachments: [
@@ -546,7 +746,7 @@ export const createBoardRenderer = async (
             storeOp: "store",
           },
         ],
-        timestampWrites: timestampWrites(0),
+        timestampWrites: timestampWrites(1),
       });
       backgroundPass.setPipeline(backgroundPipeline);
       backgroundPass.setBindGroup(0, frameBindGroup);
@@ -563,7 +763,7 @@ export const createBoardRenderer = async (
             storeOp: "store",
           },
         ],
-        timestampWrites: timestampWrites(1),
+        timestampWrites: timestampWrites(2),
       });
       gemPass.setPipeline(blitPipeline);
       gemPass.setBindGroup(0, backgroundBindGroup);
@@ -585,7 +785,7 @@ export const createBoardRenderer = async (
             storeOp: "store",
           },
         ],
-        timestampWrites: timestampWrites(2, activeFragmentCount > 0),
+        timestampWrites: timestampWrites(3, activeFragmentCount > 0),
       });
       if (activeFragmentCount > 0) {
         fragmentPass.setPipeline(fragmentPipeline);
@@ -605,7 +805,7 @@ export const createBoardRenderer = async (
             storeOp: "store",
           },
         ],
-        timestampWrites: timestampWrites(3),
+        timestampWrites: timestampWrites(4),
       });
       compositePass.setPipeline(blitPipeline);
       compositePass.setBindGroup(0, compositeBindGroup);
@@ -680,7 +880,10 @@ export const createBoardRenderer = async (
       const values = new BigUint64Array(queryReadBuffer.getMappedRange());
       const passes: Record<string, GpuTimingPass> = {};
       PASS_NAMES.forEach((passName, index) => {
-        if (passName === "fragments" && fragmentTimingFrameCount === 0) {
+        if (
+          (passName === "waveSimulation" && waveTimingFrameCount === 0) ||
+          (passName === "fragments" && fragmentTimingFrameCount === 0)
+        ) {
           passes[passName] = {
             status: "inactive",
             durationNs: 0,
@@ -703,6 +906,7 @@ export const createBoardRenderer = async (
       resetGpuTimings: async () => {
         await device.queue.onSubmittedWorkDone();
         timingFrameCount = 0;
+        waveTimingFrameCount = 0;
         fragmentTimingFrameCount = 0;
         timingCaptureActive = true;
       },
@@ -724,12 +928,21 @@ export const createBoardRenderer = async (
     return {
       updateScene: (nextScene) => {
         if (disposed) return;
+        const enteringReducedMotion =
+          nextScene.reducedMotion && scene?.reducedMotion === false;
         scene = nextScene;
         if (scene.reducedMotion && fragments.length > 0) {
-          fragments = new Float32Array();
+          fragments = EMPTY_FLOAT32;
           activeBurstExpiries = [];
           nextFragmentExpiry = Number.POSITIVE_INFINITY;
           reportWorkload();
+        }
+        if (scene.reducedMotion) {
+          pendingWaveImpulses = EMPTY_FLOAT32;
+          if (enteringReducedMotion) {
+            clearWaveTextures(device.queue, waveTextures);
+            waveReadIndex = 0;
+          }
         }
         uploadScene(environment.now());
         if (scene.reducedMotion) {

@@ -41,14 +41,13 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  1, 31.9, 29.7, 39, 75, 29.4, 15.3, 59.6, -22, 35.4, 23.1, 28.9, 70.1, 20.6,
-  11.4, 51.6, -15.1, 29.8, 19.7, 19.8, 58.5, 13.1, 4.9, 44,
+  3, 42, 37.1, 42.6, 77.5, 30.5, 14.8, 54.2, -10.4, 40.5, 31.6, 36.6, 73.5,
+  20.3, 12.9, 46.4, -7.9, 33.7, 26.5, 28.8, 62, 15.7, 7.3, 38.5,
 ];
 
 const expectedFacetSignature = [
-  1.35, -0.2, 1.33, 1.25, 1.03, 1.26, 1.11, 1.24, -1.03, 1.31, -0.26, -0.04,
-  0.32, -0.07, 0.2, -0.02, -0.32, -1.11, -1.08, -1.2, -1.35, -1.19, -1.31,
-  -1.21,
+  1.39, 0.9, 1.24, 1.17, 0.99, 1.35, 0.98, 1.22, -0.91, 0.49, -0.03, 0.11, 0.38,
+  -0.3, 0.39, 0.01, -0.48, -1.39, -1.21, -1.27, -1.37, -1.05, -1.37, -1.23,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -278,7 +277,6 @@ test("renders distinguishable faceted optical gems over submerged sand", async (
     },
     { empty: emptyCapture, optical: opticalCapture },
   );
-
   expect(difference.changedPixels).toBeGreaterThan(1_000);
   expect(difference.meanChangedChannelDelta).toBeGreaterThan(60);
   expect(difference.meanChangedChannelDelta).toBeLessThan(88);
@@ -364,6 +362,171 @@ test("animates water-surface reflection and refraction over sand", async ({
   );
 
   expect(changedPixels).toBeGreaterThan(2_000);
+});
+
+test("launches simulated wave ripples from cleared cells", async ({ page }) => {
+  const measureBackgroundChange = async (
+    triggerName,
+    captureTimings = false,
+  ) => {
+    await page.goto("/e2e-tests/fixtures/ripple.html");
+    const canvas = await expectWebGpuReady(page);
+    await page.waitForTimeout(250);
+    if (captureTimings) {
+      await page.evaluate(async () => {
+        await window.__match3RendererPerformance?.resetGpuTimings();
+      });
+    }
+    await page.getByRole("button", { name: triggerName }).click();
+    await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+    await page.waitForTimeout(2_600);
+    const before = await captureCanvasFrame(canvas);
+    await page.waitForTimeout(500);
+    const after = await captureCanvasFrame(canvas);
+    const difference = await page.evaluate(
+      async ({ afterCapture, beforeCapture }) => {
+        const decode = async (base64) => {
+          const image = new Image();
+          image.src = `data:image/png;base64,${base64}`;
+          await image.decode();
+          const surface = document.createElement("canvas");
+          surface.width = image.naturalWidth;
+          surface.height = image.naturalHeight;
+          const context = surface.getContext("2d");
+          if (!context)
+            throw new Error("A 2D sampling context is unavailable.");
+          context.drawImage(image, 0, 0);
+          return context.getImageData(0, 0, surface.width, surface.height);
+        };
+        const beforeImage = await decode(beforeCapture);
+        const afterImage = await decode(afterCapture);
+        let centerDelta = 0;
+        let centerPixels = 0;
+        let edgeDelta = 0;
+        let edgePixels = 0;
+        for (let y = 0; y < beforeImage.height; y += 1) {
+          for (let x = 0; x < beforeImage.width; x += 1) {
+            const offset = (y * beforeImage.width + x) * 4;
+            const delta =
+              Math.abs(
+                (beforeImage.data[offset] ?? 0) -
+                  (afterImage.data[offset] ?? 0),
+              ) +
+              Math.abs(
+                (beforeImage.data[offset + 1] ?? 0) -
+                  (afterImage.data[offset + 1] ?? 0),
+              ) +
+              Math.abs(
+                (beforeImage.data[offset + 2] ?? 0) -
+                  (afterImage.data[offset + 2] ?? 0),
+              );
+            const normalizedX = x / beforeImage.width;
+            const normalizedY = y / beforeImage.height;
+            if (
+              normalizedX >= 0.18 &&
+              normalizedX <= 0.82 &&
+              normalizedY >= 0.18 &&
+              normalizedY <= 0.78
+            ) {
+              centerDelta += delta;
+              centerPixels += 1;
+            } else if (
+              normalizedX <= 0.1 ||
+              normalizedX >= 0.9 ||
+              normalizedY <= 0.1 ||
+              normalizedY >= 0.9
+            ) {
+              edgeDelta += delta;
+              edgePixels += 1;
+            }
+          }
+        }
+        return {
+          centerMeanDelta: centerDelta / centerPixels,
+          edgeMeanDelta: edgeDelta / edgePixels,
+        };
+      },
+      { afterCapture: after, beforeCapture: before },
+    );
+    const timings = captureTimings
+      ? await page.evaluate(async () =>
+          window.__match3RendererPerformance?.readGpuTimings(),
+        )
+      : undefined;
+    return { difference, timings };
+  };
+
+  const ambient = await measureBackgroundChange("Clear without ripple");
+  const ripple = await measureBackgroundChange("Trigger clear ripple", true);
+  const centerRatio =
+    ripple.difference.centerMeanDelta / ambient.difference.centerMeanDelta;
+  const edgeRatio =
+    ripple.difference.edgeMeanDelta / ambient.difference.edgeMeanDelta;
+  expect(Math.max(centerRatio, edgeRatio)).toBeGreaterThan(1.5);
+  expect(ripple.timings?.supported).toBe(true);
+  expect(ripple.timings?.passes?.waveSimulation?.sampleCount).toBe(1);
+});
+
+test("does not inject clear ripples for reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/e2e-tests/fixtures/ripple.html");
+  const canvas = await expectWebGpuReady(page);
+  const before = await captureCanvasFrame(canvas);
+  await page.getByRole("button", { name: "Trigger clear ripple" }).click();
+  await expect(page.getByRole("grid").getByRole("button")).toHaveCount(0);
+  const after = await captureCanvasFrame(canvas);
+
+  const outsideChangedPixels = await page.evaluate(
+    async ({ afterCapture, beforeCapture }) => {
+      const decode = async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const surface = document.createElement("canvas");
+        surface.width = image.naturalWidth;
+        surface.height = image.naturalHeight;
+        const context = surface.getContext("2d");
+        if (!context) throw new Error("A 2D sampling context is unavailable.");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, surface.width, surface.height);
+      };
+      const beforeImage = await decode(beforeCapture);
+      const afterImage = await decode(afterCapture);
+      let changed = 0;
+      for (let y = 0; y < beforeImage.height; y += 1) {
+        for (let x = 0; x < beforeImage.width; x += 1) {
+          const normalizedX = x / beforeImage.width;
+          const normalizedY = y / beforeImage.height;
+          if (
+            normalizedX >= 0.18 &&
+            normalizedX <= 0.82 &&
+            normalizedY >= 0.34 &&
+            normalizedY <= 0.58
+          ) {
+            continue;
+          }
+          const offset = (y * beforeImage.width + x) * 4;
+          const delta =
+            Math.abs(
+              (beforeImage.data[offset] ?? 0) - (afterImage.data[offset] ?? 0),
+            ) +
+            Math.abs(
+              (beforeImage.data[offset + 1] ?? 0) -
+                (afterImage.data[offset + 1] ?? 0),
+            ) +
+            Math.abs(
+              (beforeImage.data[offset + 2] ?? 0) -
+                (afterImage.data[offset + 2] ?? 0),
+            );
+          if (delta > 6) changed += 1;
+        }
+      }
+      return changed;
+    },
+    { afterCapture: after, beforeCapture: before },
+  );
+
+  expect(outsideChangedPixels).toBeLessThan(100);
 });
 
 test("renders uniformly dark blue water with bubbles disabled", async ({

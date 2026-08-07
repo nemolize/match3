@@ -63,13 +63,13 @@ const METRIC_PATHS = [
 ];
 
 const REQUIRED_SCENARIOS = ["burst", "idle"];
-const REQUIRED_WEBGPU_PASSES = [
+const LEGACY_WEBGPU_PASSES = [
   "backgroundCaustics",
   "composite",
   "fragments",
   "gemRefraction",
-  "waveSimulation",
 ];
+const REQUIRED_WEBGPU_PASSES = [...LEGACY_WEBGPU_PASSES, "waveSimulation"];
 
 const canonicalJson = (value) => {
   if (Array.isArray(value)) {
@@ -133,6 +133,8 @@ const validateGpuTimingCoverage = (report, label) => {
   const adapterFeatures = report.environment.webGpu.adapter?.features ?? [];
   if (!usesWebGpu || !adapterFeatures.includes("timestamp-query")) return;
 
+  const requiredPasses =
+    report.schemaVersion === 2 ? LEGACY_WEBGPU_PASSES : REQUIRED_WEBGPU_PASSES;
   for (const [scenarioName, scenario] of Object.entries(report.scenarios)) {
     for (const [runIndex, timing] of scenario.gpuTimings.entries()) {
       if (timing?.supported !== true) {
@@ -149,7 +151,7 @@ const validateGpuTimingCoverage = (report, label) => {
         `${label}.scenarios.${scenarioName}.gpuTimings[${runIndex}].timestampPeriodNs`,
         Number.MIN_VALUE,
       );
-      for (const passName of REQUIRED_WEBGPU_PASSES) {
+      for (const passName of requiredPasses) {
         const pass = timing.passes[passName];
         assertObject(
           pass,
@@ -195,7 +197,7 @@ export const validatePerformanceReport = (
   { requireCurrentProfile = false } = {},
 ) => {
   assertObject(report, label);
-  if (report.schemaVersion !== 2) {
+  if (report.schemaVersion !== 2 && report.schemaVersion !== 3) {
     throw new Error(`${label} uses unsupported performance report schema`);
   }
   if (!/^[a-zA-Z0-9._-]+$/.test(report.id ?? "")) {

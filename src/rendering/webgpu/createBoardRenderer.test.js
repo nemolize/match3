@@ -1,10 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 
+import { WAVE_SIMULATION_CONFIG } from "../../config/waves";
 import {
+  clearWaveTextures,
   createBoardRenderer,
   createGemPipeline,
   gemBlendState,
-  resolveWaveSubstepDeltaFrames,
+  resolveWaveDeltaFrames,
+  resolveWaveSubstepCount,
 } from "./createBoardRenderer";
 
 const canvas = {
@@ -20,9 +23,44 @@ const environment = (gpu) => ({
 
 describe("WebGPU renderer initialization", () => {
   test("splits delayed wave frames into stable substeps without dropping time", () => {
-    expect(resolveWaveSubstepDeltaFrames(1)).toEqual([1]);
-    expect(resolveWaveSubstepDeltaFrames(2)).toEqual([1, 1]);
-    expect(resolveWaveSubstepDeltaFrames(3)).toEqual([1.5, 1.5]);
+    expect(resolveWaveSubstepCount(1)).toBe(1);
+    expect(resolveWaveSubstepCount(2)).toBe(2);
+    expect(resolveWaveSubstepCount(3)).toBe(3);
+    expect(resolveWaveDeltaFrames(4)).toBe(3);
+  });
+
+  test("keeps the two-dimensional wave integration within its stability bound", () => {
+    const maximumDeltaFrames = WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames;
+    const dampingAtMaximumStep =
+      WAVE_SIMULATION_CONFIG.velocityDampingPerFrame ** maximumDeltaFrames;
+    const stableGridCouplingLimit = (1 + dampingAtMaximumStep) / 4;
+
+    expect(
+      WAVE_SIMULATION_CONFIG.gridCoupling * maximumDeltaFrames ** 2,
+    ).toBeLessThan(stableGridCouplingLimit);
+  });
+
+  test("clears both wave states when reduced motion is enabled", () => {
+    const writeTexture = vi.fn();
+    const textures = [{ id: "first" }, { id: "second" }];
+
+    clearWaveTextures({ writeTexture }, textures);
+
+    expect(writeTexture).toHaveBeenCalledTimes(2);
+    expect(writeTexture).toHaveBeenNthCalledWith(
+      1,
+      { texture: textures[0] },
+      expect.any(Uint8Array),
+      { bytesPerRow: 512, rowsPerImage: 64 },
+      { depthOrArrayLayers: 1, height: 64, width: 64 },
+    );
+    expect(writeTexture).toHaveBeenNthCalledWith(
+      2,
+      { texture: textures[1] },
+      expect.any(Uint8Array),
+      { bytesPerRow: 512, rowsPerImage: 64 },
+      { depthOrArrayLayers: 1, height: 64, width: 64 },
+    );
   });
 
   test("uses premultiplied source-over blending for gems", () => {

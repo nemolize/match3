@@ -37,6 +37,7 @@ const INITIAL_FRAGMENT_CAPACITY = 128;
 const MAX_WATER_FRAME_DELTA_MS = 50;
 const REFERENCE_FRAME_DURATION_MS = 1000 / 60;
 const WAVE_STEP_UNIFORM_BYTES = 16;
+const WAVE_TEXTURE_BYTES_PER_PIXEL = 8;
 const MAX_WAVE_SUBSTEPS = Math.ceil(
   MAX_WATER_FRAME_DELTA_MS /
     REFERENCE_FRAME_DURATION_MS /
@@ -53,23 +54,48 @@ const PASS_NAMES = [
 const TIMING_QUERY_COUNT = PASS_NAMES.length * 2;
 const EMPTY_FLOAT32 = new Float32Array();
 
-export const resolveWaveSubstepDeltaFrames = (
-  deltaFrames: number,
-): number[] => {
-  const boundedDeltaFrames = Math.min(
+export const resolveWaveDeltaFrames = (deltaFrames: number): number =>
+  Math.min(
     Math.max(0, deltaFrames),
     MAX_WAVE_SUBSTEPS * WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
   );
-  const substepCount = Math.min(
+
+export const resolveWaveSubstepCount = (deltaFrames: number): number =>
+  Math.min(
     MAX_WAVE_SUBSTEPS,
     Math.max(
       1,
       Math.ceil(
-        boundedDeltaFrames / WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
+        resolveWaveDeltaFrames(deltaFrames) /
+          WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
       ),
     ),
   );
-  return Array<number>(substepCount).fill(boundedDeltaFrames / substepCount);
+
+export const clearWaveTextures = (
+  queue: GPUQueue,
+  textures: readonly GPUTexture[],
+): void => {
+  const bytesPerRow =
+    WAVE_SIMULATION_CONFIG.resolution * WAVE_TEXTURE_BYTES_PER_PIXEL;
+  const zeroedWaveState = new Uint8Array(
+    bytesPerRow * WAVE_SIMULATION_CONFIG.resolution,
+  );
+  for (const texture of textures) {
+    queue.writeTexture(
+      { texture },
+      zeroedWaveState,
+      {
+        bytesPerRow,
+        rowsPerImage: WAVE_SIMULATION_CONFIG.resolution,
+      },
+      {
+        width: WAVE_SIMULATION_CONFIG.resolution,
+        height: WAVE_SIMULATION_CONFIG.resolution,
+        depthOrArrayLayers: 1,
+      },
+    );
+  }
 };
 
 const createShaderModule = async (
@@ -288,7 +314,9 @@ export const createBoardRenderer = async (
         },
         format: "rgba16float",
         usage:
-          GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.STORAGE_BINDING |
+          GPUTextureUsage.TEXTURE_BINDING,
       }),
     );
     const waveTextureViews = waveTextures.map((texture) =>
@@ -452,16 +480,20 @@ export const createBoardRenderer = async (
             endOfPassWriteIndex: passIndex * 2 + 1,
           }
         : undefined;
-    const waveTimestampWrites = (substepIndex: number, substepCount: number) =>
-      querySet && timingCaptureActive
-        ? {
-            querySet,
-            ...(substepIndex === 0 ? { beginningOfPassWriteIndex: 0 } : {}),
-            ...(substepIndex === substepCount - 1
-              ? { endOfPassWriteIndex: 1 }
-              : {}),
-          }
-        : undefined;
+    const waveTimestampWrites = (
+      substepIndex: number,
+      substepCount: number,
+    ) => {
+      if (!querySet || !timingCaptureActive) return undefined;
+      const isFirstSubstep = substepIndex === 0;
+      const isLastSubstep = substepIndex === substepCount - 1;
+      if (!isFirstSubstep && !isLastSubstep) return undefined;
+      return {
+        querySet,
+        ...(isFirstSubstep ? { beginningOfPassWriteIndex: 0 } : {}),
+        ...(isLastSubstep ? { endOfPassWriteIndex: 1 } : {}),
+      };
+    };
 
     const reportWorkload = () => {
       callbacks.onWorkloadChange?.({
@@ -658,11 +690,17 @@ export const createBoardRenderer = async (
         if (pendingWaveImpulses.length > 0) {
           device.queue.writeBuffer(waveImpulseBuffer, 0, pendingWaveImpulses);
         }
-        const waveSubsteps = resolveWaveSubstepDeltaFrames(waveDeltaFrames);
-        for (const [
-          substepIndex,
-          waveSubstepDeltaFrames,
-        ] of waveSubsteps.entries()) {
+        const boundedWaveDeltaFrames = resolveWaveDeltaFrames(waveDeltaFrames);
+        const waveSubstepCount = resolveWaveSubstepCount(
+          boundedWaveDeltaFrames,
+        );
+        const waveSubstepDeltaFrames =
+          boundedWaveDeltaFrames / waveSubstepCount;
+        for (
+          let substepIndex = 0;
+          substepIndex < waveSubstepCount;
+          substepIndex += 1
+        ) {
           const waveStepBuffer = waveStepBuffers[substepIndex];
           const waveBindGroup =
             waveSimulationBindGroups[substepIndex]?.[waveReadIndex];
@@ -675,7 +713,7 @@ export const createBoardRenderer = async (
             label: `wave-simulation-${substepIndex}`,
             timestampWrites: waveTimestampWrites(
               substepIndex,
-              waveSubsteps.length,
+              waveSubstepCount,
             ),
           });
           wavePass.setPipeline(waveSimulationPipeline);
@@ -890,6 +928,8 @@ export const createBoardRenderer = async (
     return {
       updateScene: (nextScene) => {
         if (disposed) return;
+        const enteringReducedMotion =
+          nextScene.reducedMotion && scene?.reducedMotion === false;
         scene = nextScene;
         if (scene.reducedMotion && fragments.length > 0) {
           fragments = EMPTY_FLOAT32;
@@ -899,6 +939,10 @@ export const createBoardRenderer = async (
         }
         if (scene.reducedMotion) {
           pendingWaveImpulses = EMPTY_FLOAT32;
+          if (enteringReducedMotion) {
+            clearWaveTextures(device.queue, waveTextures);
+            waveReadIndex = 0;
+          }
         }
         uploadScene(environment.now());
         if (scene.reducedMotion) {

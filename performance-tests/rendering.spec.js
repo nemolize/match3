@@ -638,7 +638,7 @@ test("records a comparable rendering baseline", async ({ browser }) => {
   };
   environment.fingerprint = createEnvironmentFingerprint(environment);
   const report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id:
       process.env.PERF_RUN_ID ??
       `unmanaged-${new Date().toISOString().replaceAll(":", "-")}`,

@@ -254,7 +254,7 @@ struct WaveStep {
 
 const TAU: f32 = 6.28318530718;
 const MAX_IMPULSES: u32 = ${WAVE_SIMULATION_CONFIG.maximumImpulses}u;
-const WAVE_SPEED: f32 = ${WAVE_SIMULATION_CONFIG.propagationSpeed};
+const WAVE_SPEED: f32 = ${WAVE_SIMULATION_CONFIG.gridCoupling};
 const VELOCITY_DAMPING: f32 = ${WAVE_SIMULATION_CONFIG.velocityDampingPerFrame};
 const EDGE_DAMPING_MINIMUM: f32 = ${WAVE_SIMULATION_CONFIG.edgeDampingMinimum};
 
@@ -309,7 +309,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     state.y * pow(VELOCITY_DAMPING, deltaFrames) +
     (laplacian * WAVE_SPEED + ambientForce) * deltaFrames +
     impulseVelocity
-  ) * edgeDamping;
+  ) * pow(edgeDamping, deltaFrames);
   let nextHeight = clamp(
     height + nextVelocity * deltaFrames,
     -0.16,

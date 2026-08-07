@@ -6,7 +6,7 @@ export const WAVE_SIMULATION_CONFIG = {
   maximumImpulses: BOARD_SIZE * BOARD_SIZE,
   maximumSubstepDeltaFrames: 1.5,
   propagationSpeed: 0.28,
-  resolution: 128,
+  resolution: 64,
   velocityDampingPerFrame: 0.996,
   workgroupSize: 8,
 } as const;

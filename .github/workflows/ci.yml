@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup
       - run: pnpm run lint
 
@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup
       - run: pnpm run test
 
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e

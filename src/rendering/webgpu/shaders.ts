@@ -43,78 +43,31 @@ const gemMaterialParameters = {
   deepBodyLight: 0.78,
 } as const;
 
-export const backgroundShader = /* wgsl */ `
-${frameUniformStruct}
-@group(0) @binding(0) var<uniform> frame: Frame;
-@group(0) @binding(1) var sandSampler: sampler;
-@group(0) @binding(2) var sandTexture: texture_2d<f32>;
-@group(0) @binding(3) var waveTexture: texture_2d<f32>;
-
+const waterCausticPreamble = /* wgsl */ `
 const AIR_IOR: f32 = 1.000293;
 const WATER_IOR: f32 = 1.333;
-const SAND_FEATURE_SCALE: f32 = 2.0;
-const CAUSTIC_FEATURE_SCALE: f32 = 0.75;
-const LIGHT_RAY_FEATURE_SCALE: f32 = 2.0;
 const WAVE_HEIGHT_DEPTH_SCALE: f32 = 1.35;
 const WAVE_NORMAL_STRENGTH: f32 = 34.0;
 const MEAN_WATER_DEPTH: f32 = 0.25;
-const WATER_RAY_INTENSITY: f32 = 0.045;
-const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
-const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);
-const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);
-const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);
-const BUBBLE_COUNT: i32 = 0;
 
 struct WaterSurface {
   normal: vec3f,
   height: f32,
   energy: f32,
 }
+`;
 
-@vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
-  let positions = array<vec2f, 3>(
-    vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)
-  );
-  return vec4f(positions[index], 0.0, 1.0);
-}
-
-fn caustic(uv: vec2f, time: f32) -> f32 {
-  let a = sin((uv.x * 20.0) + sin(uv.y * 13.0 + time));
-  let b = sin((uv.y * 24.0) + sin(uv.x * 15.0 - time * 0.8));
-  return pow(max(0.0, 1.0 - abs(a + b) * 0.62), 5.0);
-}
-
-fn hash(seed: f32) -> f32 {
-  return fract(sin(seed * 12.9898) * 43758.5453);
+const waterSurfaceFunctions = /* wgsl */ `
+fn sunlightDirection() -> vec3f {
+  return normalize(vec3f(-0.25, -0.3, 0.92));
 }
 
 fn waveStateAtUv(uv: vec2f) -> vec4f {
-  let dimensions = vec2f(textureDimensions(waveTexture));
-  let samplePosition =
-    clamp(uv, vec2f(0.0), vec2f(1.0)) * (dimensions - vec2f(1.0));
-  let base = vec2i(floor(samplePosition));
-  let blend = fract(samplePosition);
-  let maximum = vec2i(dimensions) - vec2i(1);
-  let bottomLeft = textureLoad(waveTexture, clamp(base, vec2i(0), maximum), 0);
-  let bottomRight = textureLoad(
+  return textureSampleLevel(
     waveTexture,
-    clamp(base + vec2i(1, 0), vec2i(0), maximum),
-    0
-  );
-  let topLeft = textureLoad(
-    waveTexture,
-    clamp(base + vec2i(0, 1), vec2i(0), maximum),
-    0
-  );
-  let topRight = textureLoad(
-    waveTexture,
-    clamp(base + vec2i(1, 1), vec2i(0), maximum),
-    0
-  );
-  return mix(
-    mix(bottomLeft, bottomRight, blend.x),
-    mix(topLeft, topRight, blend.x),
-    blend.y
+    surfaceSampler,
+    clamp(uv, vec2f(0.002), vec2f(0.998)),
+    0.0
   );
 }
 
@@ -128,6 +81,93 @@ fn sampleWaterSurface(uv: vec2f) -> WaterSurface {
     energy
   );
 }
+`;
+
+const waveCausticFunctions = /* wgsl */ `
+fn projectSunlightToFloor(uv: vec2f, waterSurface: WaterSurface) -> vec2f {
+  let refractedLightDirection = refract(
+    -sunlightDirection(),
+    waterSurface.normal,
+    AIR_IOR / WATER_IOR
+  );
+  let waterDepth = max(
+    0.025,
+    MEAN_WATER_DEPTH + waterSurface.height * WAVE_HEIGHT_DEPTH_SCALE
+  );
+  let lightPathLength =
+    waterDepth / max(0.2, abs(refractedLightDirection.z));
+  return uv + refractedLightDirection.xy * lightPathLength * 0.85;
+}
+
+fn traceSunlightSource(floorUv: vec2f) -> vec2f {
+  let flatSurface = WaterSurface(vec3f(0.0, 0.0, 1.0), 0.0, 0.0);
+  let flatProjectedUv = projectSunlightToFloor(floorUv, flatSurface);
+  var sourceUv = floorUv - (flatProjectedUv - floorUv);
+  for (var iteration = 0; iteration < 1; iteration += 1) {
+    let sourceSurface = sampleWaterSurface(sourceUv);
+    let projectedUv = projectSunlightToFloor(sourceUv, sourceSurface);
+    sourceUv = clamp(
+      sourceUv + (floorUv - projectedUv),
+      vec2f(0.002),
+      vec2f(0.998)
+    );
+  }
+  return sourceUv;
+}
+
+fn waveCaustic(
+  floorUv: vec2f,
+  sourceUv: vec2f,
+  projectedUv: vec2f,
+  surfaceEnergy: f32
+) -> f32 {
+  let sourceArea = abs(determinant(mat2x2f(dpdx(sourceUv), dpdy(sourceUv))));
+  let projectedArea = abs(
+    determinant(mat2x2f(dpdx(projectedUv), dpdy(projectedUv)))
+  );
+  let concentration =
+    sourceArea / max(projectedArea, max(sourceArea * 0.2, 0.000000000001));
+  let focusedLight = smoothstep(1.05, 3.25, concentration);
+  let wavePresence = smoothstep(0.00002, 0.0015, surfaceEnergy);
+  let projectionError = length(projectedUv - floorUv);
+  let hitConfidence = 1.0 - smoothstep(0.001, 0.02, projectionError);
+  let causticLight = focusedLight * wavePresence * hitConfidence;
+  return select(0.0, causticLight, surfaceEnergy > 0.00002);
+}
+`;
+
+export const backgroundShader = /* wgsl */ `
+${frameUniformStruct}
+@group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var surfaceSampler: sampler;
+@group(0) @binding(2) var sandTexture: texture_2d<f32>;
+@group(0) @binding(3) var waveTexture: texture_2d<f32>;
+@group(0) @binding(4) var causticTexture: texture_2d<f32>;
+
+${waterCausticPreamble}
+
+const SAND_FEATURE_SCALE: f32 = 2.0;
+const LIGHT_RAY_FEATURE_SCALE: f32 = 2.0;
+const WATER_RAY_INTENSITY: f32 = 0.045;
+const WATER_CAUSTIC_INTENSITY: f32 = 0.28;
+const WATER_ABSORPTION: vec3f = vec3f(6.0, 3.4, 1.2);
+const WATER_SCATTERING: vec3f = vec3f(0.03, 0.18, 0.68);
+const WATER_AMBIENT_RADIANCE: vec3f = vec3f(0.02, 0.16, 0.82);
+const WATER_LIGHT_COLOR: vec3f = vec3f(0.72, 0.9, 1.0);
+const BUBBLE_COUNT: i32 = 0;
+
+@vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
+  let positions = array<vec2f, 3>(
+    vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)
+  );
+  return vec4f(positions[index], 0.0, 1.0);
+}
+
+fn hash(seed: f32) -> f32 {
+  return fract(sin(seed * 12.9898) * 43758.5453);
+}
+
+${waterSurfaceFunctions}
 
 fn fresnelDielectric(cosineIncident: f32, incidentIor: f32, transmittedIor: f32) -> f32 {
   let clampedCosine = clamp(cosineIncident, 0.0, 1.0);
@@ -152,8 +192,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
   let horizon = vec3f(0.58, 0.8, 0.88);
   let zenith = vec3f(0.1, 0.38, 0.68);
   let sky = mix(horizon, zenith, smoothstep(0.0, 1.0, upness));
-  let sunDirection = normalize(vec3f(-0.25, -0.3, 0.92));
-  let sun = pow(max(0.0, dot(direction, sunDirection)), 32.0);
+  let sun = pow(max(0.0, dot(direction, sunlightDirection())), 32.0);
   return sky + vec3f(7.0, 6.4, 5.2) * sun;
 }
 
@@ -176,7 +215,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
   let opticalPathLength =
     waterDepth / max(0.2, abs(refractionDirection.z));
   let refractionOffset = refractionDirection.xy * opticalPathLength * 0.85;
-  let refractedUv = clamp(
+  let floorUv = clamp(
     uv + refractionOffset,
     vec2f(0.002),
     vec2f(0.998)
@@ -188,7 +227,7 @@ fn sampleSky(direction: vec3f) -> vec3f {
   );
   let sampledSand = textureSample(
     sandTexture,
-    sandSampler,
+    surfaceSampler,
     sandUv
   ).rgb;
   let sand = sampledSand * vec3f(0.82, 0.82, 0.78);
@@ -204,9 +243,12 @@ fn sampleSky(direction: vec3f) -> vec3f {
     max(0.0, sin(uv.x * (18.0 / LIGHT_RAY_FEATURE_SCALE) + time * 0.35)),
     14.0
   ) * WATER_RAY_INTENSITY;
-  let causticUv =
-    vec2f(0.5) + (refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE;
-  let light = caustic(causticUv, time * 1.8) * 0.2;
+  let light = textureSampleLevel(
+    causticTexture,
+    surfaceSampler,
+    floorUv,
+    0.0
+  ).r * WATER_CAUSTIC_INTENSITY;
   transmission +=
     WATER_LIGHT_COLOR * (rays + light) * transmittance;
 
@@ -236,6 +278,38 @@ fn sampleSky(direction: vec3f) -> vec3f {
     color += vec3f(0.42, 0.82, 0.92) * ring * 0.32;
   }
   return vec4f(color, 1.0);
+}
+`;
+
+export const waveCausticShader = /* wgsl */ `
+@group(0) @binding(0) var waveTexture: texture_2d<f32>;
+@group(0) @binding(1) var surfaceSampler: sampler;
+
+${waterCausticPreamble}
+${waterSurfaceFunctions}
+${waveCausticFunctions}
+
+struct CausticVertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+}
+
+@vertex fn vertexMain(@builtin(vertex_index) index: u32) -> CausticVertexOutput {
+  let position = array<vec2f, 3>(
+    vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)
+  )[index];
+  return CausticVertexOutput(
+    vec4f(position, 0.0, 1.0),
+    position * vec2f(0.5, -0.5) + vec2f(0.5)
+  );
+}
+
+@fragment fn fragmentMain(input: CausticVertexOutput) -> @location(0) vec4f {
+  let sourceUv = traceSunlightSource(input.uv);
+  let surface = sampleWaterSurface(sourceUv);
+  let projectedUv = projectSunlightToFloor(sourceUv, surface);
+  let intensity = waveCaustic(input.uv, sourceUv, projectedUv, surface.energy);
+  return vec4f(vec3f(intensity), 1.0);
 }
 `;
 

@@ -257,6 +257,8 @@ const MAX_IMPULSES: u32 = ${WAVE_SIMULATION_CONFIG.maximumImpulses}u;
 const WAVE_SPEED: f32 = ${WAVE_SIMULATION_CONFIG.gridCoupling};
 const VELOCITY_DAMPING: f32 = ${WAVE_SIMULATION_CONFIG.velocityDampingPerFrame};
 const EDGE_DAMPING_MINIMUM: f32 = ${WAVE_SIMULATION_CONFIG.edgeDampingMinimum};
+const HEIGHT_RESTORING_FORCE: f32 = ${WAVE_SIMULATION_CONFIG.heightRestoringForcePerFrame};
+const IMPULSE_SUPPORT_SQUARED: f32 = 4.0;
 
 fn waveStateAt(cell: vec2i, dimensions: vec2i) -> vec2f {
   return textureLoad(
@@ -264,6 +266,25 @@ fn waveStateAt(cell: vec2i, dimensions: vec2i) -> vec2f {
     clamp(cell, vec2i(0), dimensions - vec2i(1)),
     0
   ).rg;
+}
+
+fn impulseProfile(sampleUv: vec2f, impulse: vec4f) -> f32 {
+  let normalizedOffset = (sampleUv - impulse.xy) / max(impulse.w, 0.001);
+  let distanceSquared = dot(normalizedOffset, normalizedOffset);
+  if (distanceSquared >= IMPULSE_SUPPORT_SQUARED) { return 0.0; }
+  return exp(-distanceSquared * 2.4);
+}
+
+fn clampedImpulseProfile(
+  uv: vec2f,
+  offset: vec2i,
+  texelSize: vec2f,
+  impulse: vec4f
+) -> f32 {
+  let halfTexel = texelSize * 0.5;
+  let offsetUv = vec2f(f32(offset.x), f32(offset.y)) * texelSize;
+  let sampleUv = clamp(uv + offsetUv, halfTexel, vec2f(1.0) - halfTexel);
+  return impulseProfile(sampleUv, impulse);
 }
 
 @compute @workgroup_size(${WAVE_SIMULATION_CONFIG.workgroupSize}, ${WAVE_SIMULATION_CONFIG.workgroupSize})
@@ -282,6 +303,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
   let laplacian = left + right + bottom + top - 4.0 * height;
   let surfaceGradient = vec2f(right - left, top - bottom);
   let uv = (vec2f(invocation.xy) + vec2f(0.5)) / vec2f(dimensions);
+  let texelSize = vec2f(1.0) / vec2f(dimensions);
   let deltaFrames = clamp(
     step.deltaFrames,
     0.0,
@@ -294,9 +316,14 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
   let impulseCount = min(u32(step.impulseCount), MAX_IMPULSES);
   for (var index = 0u; index < impulseCount; index += 1u) {
     let impulse = impulses[index];
-    let normalizedDistance = distance(uv, impulse.xy) / max(impulse.w, 0.001);
-    let distanceSquared = normalizedDistance * normalizedDistance;
-    impulseVelocity += impulse.z * exp(-distanceSquared * 2.4);
+    let centerProfile = impulseProfile(uv, impulse);
+    let zeroSumWavelet =
+      4.0 * centerProfile -
+      clampedImpulseProfile(uv, vec2i(-1, 0), texelSize, impulse) -
+      clampedImpulseProfile(uv, vec2i(1, 0), texelSize, impulse) -
+      clampedImpulseProfile(uv, vec2i(0, -1), texelSize, impulse) -
+      clampedImpulseProfile(uv, vec2i(0, 1), texelSize, impulse);
+    impulseVelocity += impulse.z * zeroSumWavelet;
   }
 
   let edgeDistance = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
@@ -307,7 +334,11 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
   );
   let nextVelocity = (
     state.y * pow(VELOCITY_DAMPING, deltaFrames) +
-    (laplacian * WAVE_SPEED + ambientForce) * deltaFrames +
+    (
+      laplacian * WAVE_SPEED -
+      height * HEIGHT_RESTORING_FORCE +
+      ambientForce
+    ) * deltaFrames +
     impulseVelocity
   ) * pow(edgeDamping, deltaFrames);
   let nextHeight = clamp(

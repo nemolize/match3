@@ -368,10 +368,18 @@ test("launches simulated wave ripples from cleared cells", async ({ page }) => {
   const measureBackgroundChange = async (
     triggerName,
     captureTimings = false,
+    warmupRippleCount = 0,
   ) => {
     await page.goto("/e2e-tests/fixtures/ripple.html");
     const canvas = await expectWebGpuReady(page);
     await page.waitForTimeout(250);
+    const rippleTrigger = page.getByRole("button", {
+      name: "Trigger clear ripple",
+    });
+    for (let index = 0; index < warmupRippleCount; index += 1) {
+      await rippleTrigger.click();
+      await expect(rippleTrigger).toBeEnabled();
+    }
     if (captureTimings) {
       await page.evaluate(async () => {
         await window.__match3RendererPerformance?.resetGpuTimings();
@@ -458,11 +466,22 @@ test("launches simulated wave ripples from cleared cells", async ({ page }) => {
 
   const ambient = await measureBackgroundChange("Clear without ripple");
   const ripple = await measureBackgroundChange("Trigger clear ripple", true);
+  const repeatedRipple = await measureBackgroundChange(
+    "Trigger clear ripple",
+    false,
+    12,
+  );
   const centerRatio =
     ripple.difference.centerMeanDelta / ambient.difference.centerMeanDelta;
   const edgeRatio =
     ripple.difference.edgeMeanDelta / ambient.difference.edgeMeanDelta;
+  const repeatedCenterRatio =
+    repeatedRipple.difference.centerMeanDelta /
+    ambient.difference.centerMeanDelta;
+  const repeatedEdgeRatio =
+    repeatedRipple.difference.edgeMeanDelta / ambient.difference.edgeMeanDelta;
   expect(Math.max(centerRatio, edgeRatio)).toBeGreaterThan(1.5);
+  expect(Math.max(repeatedCenterRatio, repeatedEdgeRatio)).toBeGreaterThan(1.5);
   expect(ripple.timings?.supported).toBe(true);
   expect(ripple.timings?.passes?.waveSimulation?.sampleCount).toBe(1);
 });

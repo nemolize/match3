@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 
+import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
+
 import {
   backgroundShader,
   fragmentShader,
@@ -118,6 +120,10 @@ describe("wave simulation shader", () => {
       "const EDGE_DAMPING_MINIMUM: f32 = 0.97;",
     );
     expect(waveSimulationShader).toContain(
+      "const HEIGHT_RESTORING_FORCE: f32 = 0.0001;",
+    );
+    expect(waveSimulationShader).toContain("height * HEIGHT_RESTORING_FORCE");
+    expect(waveSimulationShader).toContain(
       "vec4f(nextHeight, nextVelocity, surfaceGradient)",
     );
     expect(waveSimulationShader).toContain(
@@ -125,16 +131,126 @@ describe("wave simulation shader", () => {
     );
   });
 
-  test("injects clear ripples and absorbs wave energy at the edges", () => {
+  test("injects zero-sum clear ripples and absorbs wave energy at the edges", () => {
     expect(waveSimulationShader).toContain(
       "@group(0) @binding(3) var<storage, read> impulses: array<vec4f>;",
     );
     expect(waveSimulationShader).toContain(
-      "impulseVelocity += impulse.z * exp(-distanceSquared * 2.4);",
+      "impulseVelocity += impulse.z * zeroSumWavelet;",
+    );
+    expect(waveSimulationShader).toContain(
+      "if (distanceSquared >= IMPULSE_SUPPORT_SQUARED) { return 0.0; }",
+    );
+    expect(waveSimulationShader).toContain(
+      "let distanceSquared = dot(normalizedOffset, normalizedOffset);",
+    );
+    expect(waveSimulationShader).toContain("4.0 * centerProfile -");
+    expect(waveSimulationShader.match(/clampedImpulseProfile\(/g)).toHaveLength(
+      5,
     );
     expect(waveSimulationShader).toContain(
       "smoothstep(0.0, 0.08, edgeDistance)",
     );
+  });
+
+  test("keeps the discrete clear impulse sum at zero", () => {
+    const resolution = 64;
+    const texelSize = 1 / resolution;
+    const radius = 0.036;
+    const impulseCenters = [
+      [0.5, 0.5],
+      [0.02, 0.48],
+      [0.99, 0.01],
+    ];
+    const profile = (column, row, [centerX, centerY]) => {
+      const sampleX =
+        (Math.min(resolution - 1, Math.max(0, column)) + 0.5) * texelSize;
+      const sampleY =
+        (Math.min(resolution - 1, Math.max(0, row)) + 0.5) * texelSize;
+      const normalizedX = (sampleX - centerX) / radius;
+      const normalizedY = (sampleY - centerY) / radius;
+      const distanceSquared = normalizedX ** 2 + normalizedY ** 2;
+      return distanceSquared >= 4 ? 0 : Math.exp(-distanceSquared * 2.4);
+    };
+
+    for (const impulseCenter of impulseCenters) {
+      let impulseSum = 0;
+      for (let row = 0; row < resolution; row += 1) {
+        for (let column = 0; column < resolution; column += 1) {
+          impulseSum +=
+            4 * profile(column, row, impulseCenter) -
+            profile(column - 1, row, impulseCenter) -
+            profile(column + 1, row, impulseCenter) -
+            profile(column, row - 1, impulseCenter) -
+            profile(column, row + 1, impulseCenter);
+        }
+      }
+      expect(impulseSum).toBeCloseTo(0, 12);
+    }
+  });
+
+  test("restores a displaced mean surface height toward zero", () => {
+    const resolution = WAVE_SIMULATION_CONFIG.resolution;
+    const cellCount = resolution * resolution;
+    let heights = new Float32Array(cellCount).fill(0.12);
+    let velocities = new Float32Array(cellCount);
+
+    for (let frame = 0; frame < 1_800; frame += 1) {
+      const nextHeights = new Float32Array(cellCount);
+      const nextVelocities = new Float32Array(cellCount);
+      for (let row = 0; row < resolution; row += 1) {
+        for (let column = 0; column < resolution; column += 1) {
+          const index = row * resolution + column;
+          const sampleHeight = (sampleColumn, sampleRow) => {
+            const clampedColumn = Math.min(
+              resolution - 1,
+              Math.max(0, sampleColumn),
+            );
+            const clampedRow = Math.min(resolution - 1, Math.max(0, sampleRow));
+            return heights[clampedRow * resolution + clampedColumn] ?? 0;
+          };
+          const height = heights[index] ?? 0;
+          const laplacian =
+            sampleHeight(column - 1, row) +
+            sampleHeight(column + 1, row) +
+            sampleHeight(column, row - 1) +
+            sampleHeight(column, row + 1) -
+            4 * height;
+          const normalizedX = (column + 0.5) / resolution;
+          const normalizedY = (row + 0.5) / resolution;
+          const edgeDistance = Math.min(
+            normalizedX,
+            1 - normalizedX,
+            normalizedY,
+            1 - normalizedY,
+          );
+          const edgeProgress = Math.min(1, Math.max(0, edgeDistance / 0.08));
+          const smoothEdgeProgress =
+            edgeProgress * edgeProgress * (3 - 2 * edgeProgress);
+          const edgeDamping =
+            WAVE_SIMULATION_CONFIG.edgeDampingMinimum +
+            (1 - WAVE_SIMULATION_CONFIG.edgeDampingMinimum) *
+              smoothEdgeProgress;
+          const nextVelocity =
+            ((velocities[index] ?? 0) *
+              WAVE_SIMULATION_CONFIG.velocityDampingPerFrame +
+              (laplacian * WAVE_SIMULATION_CONFIG.gridCoupling -
+                height * WAVE_SIMULATION_CONFIG.heightRestoringForcePerFrame)) *
+            edgeDamping;
+          nextVelocities[index] = nextVelocity;
+          nextHeights[index] = Math.min(
+            0.16,
+            Math.max(-0.16, height + nextVelocity),
+          );
+        }
+      }
+      heights = nextHeights;
+      velocities = nextVelocities;
+    }
+
+    const restoredMean =
+      heights.reduce((sum, height) => sum + height, 0) / cellCount;
+    expect(Math.abs(restoredMean)).toBeLessThan(0.01);
   });
 });
 

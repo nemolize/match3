@@ -11,8 +11,10 @@ When motion is enabled, they are preceded by a wave-simulation stage of one to
 three compute substep passes:
 
 1. `waveSimulation` advances persistent 64x64 ping-pong wave textures. Gem
-   clears inject cell-centered velocity impulses, and bounded substeps preserve
-   stability without dropping elapsed time.
+   clears inject cell-centered, zero-sum velocity wavelets, and bounded substeps
+   preserve stability without dropping elapsed time. A weak restoring force
+   returns the mean surface height to zero instead of allowing repeated clears
+   or accumulated numerical error to shift the entire surface.
 2. `backgroundCaustics` refracts the sand through the simulated wave height and
    normals, applies depth-modulated Beer-Lambert extinction, single scattering,
    and caustics, then blends a reflected sky using dielectric Fresnel into

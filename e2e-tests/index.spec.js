@@ -41,13 +41,13 @@ const captureCanvasFrame = async (canvas) =>
   (await canvas.screenshot()).toString("base64");
 
 const expectedMaterialSignature = [
-  3, 42, 37.1, 42.6, 77.5, 30.5, 14.8, 54.2, -10.4, 40.5, 31.6, 36.6, 73.5,
-  20.3, 12.9, 46.4, -7.9, 33.7, 26.5, 28.8, 62, 15.7, 7.3, 38.5,
+  9.9, 46.3, 40.5, 43.7, 77.5, 30.6, 14.8, 55.7, -1, 40.6, 33.3, 41.9, 73.4,
+  21.3, 13.2, 46.5, -2.8, 33.6, 28.4, 35.8, 61.9, 18.6, 10.6, 38.4,
 ];
 
 const expectedFacetSignature = [
-  1.39, 0.9, 1.24, 1.17, 0.99, 1.35, 0.98, 1.22, -0.91, 0.49, -0.03, 0.11, 0.38,
-  -0.3, 0.39, 0.01, -0.48, -1.39, -1.21, -1.27, -1.37, -1.05, -1.37, -1.23,
+  1.4, 1.18, 1.29, 0.96, 0.99, 1.38, 1.12, 1.25, -0.54, 0.08, -0.15, 0.42, 0.37,
+  -0.43, 0.19, -0.05, -0.86, -1.26, -1.14, -1.38, -1.37, -0.95, -1.31, -1.2,
 ];
 
 test("should load the match3 game page", async ({ page }) => {
@@ -362,6 +362,55 @@ test("animates water-surface reflection and refraction over sand", async ({
   );
 
   expect(changedPixels).toBeGreaterThan(2_000);
+});
+
+test("focuses caustic light from a controlled ripple wave field", async ({
+  page,
+}) => {
+  await page.goto("/e2e-tests/fixtures/caustics.html");
+  const canvas = page.locator("canvas");
+  await expect(canvas).toHaveAttribute("data-renderer-status", "ready");
+  const flatCapture = await captureCanvasFrame(canvas);
+  await page.getByRole("button", { name: "Render ripple caustics" }).click();
+  await expect(canvas).toHaveAttribute("data-wave-state", "ripple");
+  const rippleCapture = await captureCanvasFrame(canvas);
+
+  const metrics = await page.evaluate(
+    async ({ flat, ripple }) => {
+      const decode = async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const surface = document.createElement("canvas");
+        surface.width = image.naturalWidth;
+        surface.height = image.naturalHeight;
+        const context = surface.getContext("2d");
+        if (!context) throw new Error("A 2D sampling context is unavailable.");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, surface.width, surface.height);
+      };
+      const flatImage = await decode(flat);
+      const rippleImage = await decode(ripple);
+      let flatMaximum = 0;
+      let rippleMaximum = 0;
+      let focusedPixels = 0;
+      for (let y = 1; y < rippleImage.height - 1; y += 1) {
+        for (let x = 1; x < rippleImage.width - 1; x += 1) {
+          const index = (y * rippleImage.width + x) * 4;
+          flatMaximum = Math.max(flatMaximum, flatImage.data[index] ?? 0);
+          const intensity = rippleImage.data[index] ?? 0;
+          rippleMaximum = Math.max(rippleMaximum, intensity);
+          if (intensity > 32) focusedPixels += 1;
+        }
+      }
+      return { flatMaximum, focusedPixels, rippleMaximum };
+    },
+    { flat: flatCapture, ripple: rippleCapture },
+  );
+
+  expect(metrics.flatMaximum).toBeLessThanOrEqual(1);
+  expect(metrics.rippleMaximum).toBeGreaterThan(64);
+  expect(metrics.focusedPixels).toBeGreaterThan(100);
 });
 
 test("launches simulated wave ripples from cleared cells", async ({ page }) => {

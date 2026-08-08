@@ -6,6 +6,7 @@ import {
   backgroundShader,
   fragmentShader,
   gemShader,
+  waveCausticShader,
   waveSimulationShader,
 } from "./shaders";
 
@@ -13,14 +14,12 @@ describe("background shader", () => {
   test("refracts the sand through the simulated water surface", () => {
     expect(backgroundShader).toContain("var sandTexture: texture_2d<f32>;");
     expect(backgroundShader).toContain("var waveTexture: texture_2d<f32>;");
+    expect(backgroundShader).toContain("var causticTexture: texture_2d<f32>;");
     expect(backgroundShader).toContain(
       "fn sampleWaterSurface(uv: vec2f) -> WaterSurface",
     );
     expect(backgroundShader).toContain("const WATER_IOR: f32 = 1.333;");
     expect(backgroundShader).toContain("const SAND_FEATURE_SCALE: f32 = 2.0;");
-    expect(backgroundShader).toContain(
-      "const CAUSTIC_FEATURE_SCALE: f32 = 0.75;",
-    );
     expect(backgroundShader).toContain(
       "let energy = abs(state.y) + length(state.zw) * 0.5;",
     );
@@ -33,7 +32,7 @@ describe("background shader", () => {
     expect(backgroundShader).toContain(
       "(uv - vec2f(0.5)) / SAND_FEATURE_SCALE + refractionOffset",
     );
-    expect(backgroundShader).toContain("sandSampler,\n    sandUv");
+    expect(backgroundShader).toContain("surfaceSampler,\n    sandUv");
   });
 
   test("highlights simulated displacement and wave energy", () => {
@@ -46,7 +45,10 @@ describe("background shader", () => {
     expect(backgroundShader).toContain(
       "(wavefront * 0.34 + displacedWater * 0.16) *",
     );
-    expect(backgroundShader.match(/textureLoad\(/g)).toHaveLength(4);
+    expect(backgroundShader).toContain(
+      "textureSampleLevel(\n    waveTexture,\n    surfaceSampler,",
+    );
+    expect(backgroundShader).not.toContain("textureLoad(");
   });
 
   test("uses dielectric Fresnel, reflection, and Beer-Lambert absorption", () => {
@@ -94,13 +96,28 @@ describe("background shader", () => {
     expect(backgroundShader).toContain(
       "return sky + vec3f(7.0, 6.4, 5.2) * sun;",
     );
-    expect(backgroundShader).toContain(
-      "(refractedUv - vec2f(0.5)) / CAUSTIC_FEATURE_SCALE",
-    );
-    expect(backgroundShader).toContain(
-      "let light = caustic(causticUv, time * 1.8)",
-    );
     expect(backgroundShader).toContain("const BUBBLE_COUNT: i32 = 0;");
+  });
+
+  test("derives caustic concentration from refracted simulated waves", () => {
+    expect(backgroundShader).not.toContain("fn caustic(");
+    expect(backgroundShader).toContain(
+      "textureSampleLevel(\n    causticTexture,\n    surfaceSampler,\n    floorUv,",
+    );
+    expect(backgroundShader).toContain(
+      "let floorUv = clamp(\n    uv + refractionOffset,",
+    );
+    expect(backgroundShader).not.toContain("fn traceSunlightSource(");
+    expect(waveCausticShader).toContain("sourceUv + (floorUv - projectedUv)");
+    expect(waveCausticShader).toContain(
+      "determinant(mat2x2f(dpdx(projectedUv), dpdy(projectedUv)))",
+    );
+    expect(waveCausticShader).toContain(
+      "sourceArea / max(projectedArea, max(sourceArea * 0.2, 0.000000000001));",
+    );
+    expect(waveCausticShader).toContain(
+      "let projectionError = length(projectedUv - floorUv);",
+    );
   });
 });
 

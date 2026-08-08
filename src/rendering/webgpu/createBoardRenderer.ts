@@ -19,6 +19,7 @@ import {
   blitShader,
   fragmentShader,
   gemShader,
+  waveCausticShader,
   waveSimulationShader,
 } from "./shaders";
 import type {
@@ -38,6 +39,8 @@ const MAX_WATER_FRAME_DELTA_MS = 50;
 const REFERENCE_FRAME_DURATION_MS = 1000 / 60;
 const WAVE_STEP_UNIFORM_BYTES = 16;
 const WAVE_TEXTURE_BYTES_PER_PIXEL = 8;
+const CAUSTIC_TEXTURE_RESOLUTION = WAVE_SIMULATION_CONFIG.resolution * 2;
+const CAUSTIC_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
 const MAX_WAVE_SUBSTEPS = Math.ceil(
   MAX_WATER_FRAME_DELTA_MS /
     REFERENCE_FRAME_DURATION_MS /
@@ -230,12 +233,14 @@ export const createBoardRenderer = async (
     const [
       backgroundModule,
       blitModule,
+      causticModule,
       gemModule,
       fragmentModule,
       waveSimulationModule,
     ] = await Promise.all([
       createShaderModule(device, backgroundShader, "background-caustics"),
       createShaderModule(device, blitShader, "composite-blit"),
+      createShaderModule(device, waveCausticShader, "wave-caustics"),
       createShaderModule(device, gemShader, "gem-refraction"),
       createShaderModule(device, fragmentShader, "fragments"),
       createShaderModule(device, waveSimulationShader, "wave-simulation"),
@@ -254,6 +259,13 @@ export const createBoardRenderer = async (
       blitModule,
       undefined,
       "texture-blit",
+    );
+    const causticPipeline = createPipeline(
+      device,
+      CAUSTIC_TEXTURE_FORMAT,
+      causticModule,
+      undefined,
+      "wave-caustics",
     );
     const gemPipeline = createGemPipeline(device, format, gemModule);
     const fragmentPipeline = createPipeline(
@@ -343,6 +355,26 @@ export const createBoardRenderer = async (
       magFilter: "linear",
       minFilter: "linear",
     });
+    const causticTexture = device.createTexture({
+      format: CAUSTIC_TEXTURE_FORMAT,
+      label: "wave-caustic-light",
+      size: {
+        height: CAUSTIC_TEXTURE_RESOLUTION,
+        width: CAUSTIC_TEXTURE_RESOLUTION,
+      },
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const causticTextureView = causticTexture.createView();
+    const causticBindGroups = waveTextureViews.map((waveTextureView) =>
+      device.createBindGroup({
+        entries: [
+          { binding: 0, resource: waveTextureView },
+          { binding: 1, resource: sampler },
+        ],
+        layout: causticPipeline.getBindGroupLayout(0),
+      }),
+    );
     const sandTexture = await createSandTexture(device);
 
     const querySet = timestampQuerySupported
@@ -417,6 +449,7 @@ export const createBoardRenderer = async (
           { binding: 1, resource: sampler },
           { binding: 2, resource: sandTextureView },
           { binding: 3, resource: waveTextureView },
+          { binding: 4, resource: causticTextureView },
         ],
       }),
     );
@@ -458,6 +491,7 @@ export const createBoardRenderer = async (
       backgroundTexture?.destroy();
       sceneTexture?.destroy();
       sandTexture.destroy();
+      causticTexture.destroy();
       uniformBuffer.destroy();
       gemBuffer.destroy();
       fragmentBuffer.destroy();
@@ -480,6 +514,18 @@ export const createBoardRenderer = async (
             endOfPassWriteIndex: passIndex * 2 + 1,
           }
         : undefined;
+    const splitTimestampWrites = (
+      passIndex: number,
+      boundary: "beginning" | "end",
+    ) => {
+      if (!querySet || !timingCaptureActive) return undefined;
+      return {
+        querySet,
+        ...(boundary === "beginning"
+          ? { beginningOfPassWriteIndex: passIndex * 2 }
+          : { endOfPassWriteIndex: passIndex * 2 + 1 }),
+      };
+    };
     const waveTimestampWrites = (
       substepIndex: number,
       substepCount: number,
@@ -735,7 +781,24 @@ export const createBoardRenderer = async (
         pendingWaveImpulses = EMPTY_FLOAT32;
       }
       const frameBindGroup = frameBindGroups[waveReadIndex];
-      if (!frameBindGroup) return;
+      const causticBindGroup = causticBindGroups[waveReadIndex];
+      if (!frameBindGroup || !causticBindGroup) return;
+      const causticPass = encoder.beginRenderPass({
+        label: "wave-caustics",
+        colorAttachments: [
+          {
+            view: causticTextureView,
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            loadOp: "clear",
+            storeOp: "store",
+          },
+        ],
+        timestampWrites: splitTimestampWrites(1, "beginning"),
+      });
+      causticPass.setPipeline(causticPipeline);
+      causticPass.setBindGroup(0, causticBindGroup);
+      causticPass.draw(3);
+      causticPass.end();
       const backgroundPass = encoder.beginRenderPass({
         label: "background-caustics",
         colorAttachments: [
@@ -746,7 +809,7 @@ export const createBoardRenderer = async (
             storeOp: "store",
           },
         ],
-        timestampWrites: timestampWrites(1),
+        timestampWrites: splitTimestampWrites(1, "end"),
       });
       backgroundPass.setPipeline(backgroundPipeline);
       backgroundPass.setBindGroup(0, frameBindGroup);

@@ -45,6 +45,7 @@ const RippleFixture = () => {
   const [matches, setMatches] = useState<Match[]>([]);
 
   const triggerRipple = () => {
+    setBoard(createRippleBoard());
     setMatches([rippleMatch]);
     window.setTimeout(() => {
       setBoard(createBoard());

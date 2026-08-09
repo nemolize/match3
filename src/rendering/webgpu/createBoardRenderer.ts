@@ -63,15 +63,14 @@ export const resolveWaveDeltaFrames = (deltaFrames: number): number =>
     MAX_WAVE_SUBSTEPS * WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
   );
 
-export const resolveWaveSubstepCount = (deltaFrames: number): number =>
+// Floor, not ceil: the leftover carries to the next frame rather than
+// stretching this frame's step, keeping decay independent of refresh rate.
+export const resolveWaveSubstepCount = (accumulatedFrames: number): number =>
   Math.min(
     MAX_WAVE_SUBSTEPS,
-    Math.max(
-      1,
-      Math.ceil(
-        resolveWaveDeltaFrames(deltaFrames) /
-          WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
-      ),
+    Math.floor(
+      resolveWaveDeltaFrames(accumulatedFrames) /
+        WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
     ),
   );
 
@@ -411,6 +410,7 @@ export const createBoardRenderer = async (
     let animationFrame = 0;
     let lastWaterFrameTime: number | null = null;
     let waterTimeMs = 0;
+    let pendingWaveFrames = 0;
     let waveReadIndex = 0;
     let layout: BoardLayout | null = null;
     let scene: BoardSceneUpdate | null = null;
@@ -691,9 +691,9 @@ export const createBoardRenderer = async (
         }
         reportWorkload();
       }
-      let waveDeltaFrames = 0;
       if (scene.reducedMotion) {
         lastWaterFrameTime = null;
+        pendingWaveFrames = 0;
       } else {
         if (lastWaterFrameTime !== null) {
           const waterFrameDeltaMs = Math.min(
@@ -706,9 +706,9 @@ export const createBoardRenderer = async (
             now,
             MAX_WATER_FRAME_DELTA_MS,
           );
-          waveDeltaFrames = waterFrameDeltaMs / REFERENCE_FRAME_DURATION_MS;
+          pendingWaveFrames += waterFrameDeltaMs / REFERENCE_FRAME_DURATION_MS;
         } else {
-          waveDeltaFrames = 1;
+          pendingWaveFrames += 1;
         }
         lastWaterFrameTime = now;
       }
@@ -732,16 +732,15 @@ export const createBoardRenderer = async (
       }
       const encoder = device.createCommandEncoder({ label: "board-frame" });
       if (!scene.reducedMotion) {
+        pendingWaveFrames = resolveWaveDeltaFrames(pendingWaveFrames);
+        const waveSubstepCount = resolveWaveSubstepCount(pendingWaveFrames);
+        const waveSubstepDeltaFrames =
+          WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames;
+        pendingWaveFrames -= waveSubstepCount * waveSubstepDeltaFrames;
         const impulseCount = pendingWaveImpulses.length / WAVE_IMPULSE_STRIDE;
-        if (pendingWaveImpulses.length > 0) {
+        if (pendingWaveImpulses.length > 0 && waveSubstepCount > 0) {
           device.queue.writeBuffer(waveImpulseBuffer, 0, pendingWaveImpulses);
         }
-        const boundedWaveDeltaFrames = resolveWaveDeltaFrames(waveDeltaFrames);
-        const waveSubstepCount = resolveWaveSubstepCount(
-          boundedWaveDeltaFrames,
-        );
-        const waveSubstepDeltaFrames =
-          boundedWaveDeltaFrames / waveSubstepCount;
         for (
           let substepIndex = 0;
           substepIndex < waveSubstepCount;
@@ -777,8 +776,12 @@ export const createBoardRenderer = async (
           wavePass.end();
           waveReadIndex = 1 - waveReadIndex;
         }
-        if (timingCaptureActive) waveTimingFrameCount += 1;
-        pendingWaveImpulses = EMPTY_FLOAT32;
+        if (timingCaptureActive && waveSubstepCount > 0) {
+          waveTimingFrameCount += 1;
+        }
+        // A frame that ran no substep never injected them; holding them lets the
+        // next substep pick them up instead of dropping the clear's ripple.
+        if (waveSubstepCount > 0) pendingWaveImpulses = EMPTY_FLOAT32;
       }
       const frameBindGroup = frameBindGroups[waveReadIndex];
       const causticBindGroup = causticBindGroups[waveReadIndex];

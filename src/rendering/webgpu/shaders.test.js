@@ -3,6 +3,10 @@ import { describe, expect, test } from "vitest";
 import { WAVE_SIMULATION_CONFIG } from "@/config/waves";
 
 import {
+  resolveWaveDeltaFrames,
+  resolveWaveSubstepCount,
+} from "./createBoardRenderer";
+import {
   backgroundShader,
   fragmentShader,
   gemShader,
@@ -131,13 +135,13 @@ describe("wave simulation shader", () => {
       "state.y * pow(VELOCITY_DAMPING, deltaFrames)",
     );
     expect(waveSimulationShader).toContain(
-      "const VELOCITY_DAMPING: f32 = 0.996;",
+      "const VELOCITY_DAMPING: f32 = 0.98;",
     );
     expect(waveSimulationShader).toContain(
       "const EDGE_DAMPING_MINIMUM: f32 = 0.97;",
     );
     expect(waveSimulationShader).toContain(
-      "const HEIGHT_RESTORING_FORCE: f32 = 0.0001;",
+      "const HEIGHT_RESTORING_FORCE: f32 = 0.0008;",
     );
     expect(waveSimulationShader).toContain("height * HEIGHT_RESTORING_FORCE");
     expect(waveSimulationShader).toContain(
@@ -206,68 +210,164 @@ describe("wave simulation shader", () => {
     }
   });
 
+  // Mirrors the WGSL update in `waveSimulationShader`; ambient forcing and clear
+  // impulses are deliberately omitted, since neither test below drives them.
+  const advanceWaveField = (heights, velocities, deltaFrames) => {
+    const resolution = WAVE_SIMULATION_CONFIG.resolution;
+    const nextHeights = new Float64Array(heights.length);
+    const nextVelocities = new Float64Array(velocities.length);
+    for (let row = 0; row < resolution; row += 1) {
+      for (let column = 0; column < resolution; column += 1) {
+        const index = row * resolution + column;
+        const sampleHeight = (sampleColumn, sampleRow) =>
+          heights[
+            Math.min(resolution - 1, Math.max(0, sampleRow)) * resolution +
+              Math.min(resolution - 1, Math.max(0, sampleColumn))
+          ] ?? 0;
+        const height = heights[index] ?? 0;
+        const laplacian =
+          sampleHeight(column - 1, row) +
+          sampleHeight(column + 1, row) +
+          sampleHeight(column, row - 1) +
+          sampleHeight(column, row + 1) -
+          4 * height;
+        const normalizedX = (column + 0.5) / resolution;
+        const normalizedY = (row + 0.5) / resolution;
+        const edgeDistance = Math.min(
+          normalizedX,
+          1 - normalizedX,
+          normalizedY,
+          1 - normalizedY,
+        );
+        const edgeProgress = Math.min(1, Math.max(0, edgeDistance / 0.08));
+        const edgeDamping =
+          WAVE_SIMULATION_CONFIG.edgeDampingMinimum +
+          (1 - WAVE_SIMULATION_CONFIG.edgeDampingMinimum) *
+            edgeProgress *
+            edgeProgress *
+            (3 - 2 * edgeProgress);
+        const nextVelocity =
+          ((velocities[index] ?? 0) *
+            WAVE_SIMULATION_CONFIG.velocityDampingPerFrame ** deltaFrames +
+            (laplacian * WAVE_SIMULATION_CONFIG.gridCoupling -
+              height * WAVE_SIMULATION_CONFIG.heightRestoringForcePerFrame) *
+              deltaFrames) *
+          edgeDamping ** deltaFrames;
+        nextVelocities[index] = nextVelocity;
+        nextHeights[index] = Math.min(
+          0.16,
+          Math.max(-0.16, height + nextVelocity * deltaFrames),
+        );
+      }
+    }
+    return [nextHeights, nextVelocities];
+  };
+
+  const fieldEnergy = (heights, velocities) =>
+    Math.sqrt(
+      heights.reduce(
+        (sum, height, index) =>
+          sum + height * height + velocities[index] * velocities[index],
+        0,
+      ),
+    );
+
   test("restores a displaced mean surface height toward zero", () => {
     const resolution = WAVE_SIMULATION_CONFIG.resolution;
     const cellCount = resolution * resolution;
-    let heights = new Float32Array(cellCount).fill(0.12);
-    let velocities = new Float32Array(cellCount);
+    let heights = new Float64Array(cellCount).fill(0.12);
+    let velocities = new Float64Array(cellCount);
 
     for (let frame = 0; frame < 1_800; frame += 1) {
-      const nextHeights = new Float32Array(cellCount);
-      const nextVelocities = new Float32Array(cellCount);
-      for (let row = 0; row < resolution; row += 1) {
-        for (let column = 0; column < resolution; column += 1) {
-          const index = row * resolution + column;
-          const sampleHeight = (sampleColumn, sampleRow) => {
-            const clampedColumn = Math.min(
-              resolution - 1,
-              Math.max(0, sampleColumn),
-            );
-            const clampedRow = Math.min(resolution - 1, Math.max(0, sampleRow));
-            return heights[clampedRow * resolution + clampedColumn] ?? 0;
-          };
-          const height = heights[index] ?? 0;
-          const laplacian =
-            sampleHeight(column - 1, row) +
-            sampleHeight(column + 1, row) +
-            sampleHeight(column, row - 1) +
-            sampleHeight(column, row + 1) -
-            4 * height;
-          const normalizedX = (column + 0.5) / resolution;
-          const normalizedY = (row + 0.5) / resolution;
-          const edgeDistance = Math.min(
-            normalizedX,
-            1 - normalizedX,
-            normalizedY,
-            1 - normalizedY,
-          );
-          const edgeProgress = Math.min(1, Math.max(0, edgeDistance / 0.08));
-          const smoothEdgeProgress =
-            edgeProgress * edgeProgress * (3 - 2 * edgeProgress);
-          const edgeDamping =
-            WAVE_SIMULATION_CONFIG.edgeDampingMinimum +
-            (1 - WAVE_SIMULATION_CONFIG.edgeDampingMinimum) *
-              smoothEdgeProgress;
-          const nextVelocity =
-            ((velocities[index] ?? 0) *
-              WAVE_SIMULATION_CONFIG.velocityDampingPerFrame +
-              (laplacian * WAVE_SIMULATION_CONFIG.gridCoupling -
-                height * WAVE_SIMULATION_CONFIG.heightRestoringForcePerFrame)) *
-            edgeDamping;
-          nextVelocities[index] = nextVelocity;
-          nextHeights[index] = Math.min(
-            0.16,
-            Math.max(-0.16, height + nextVelocity),
-          );
-        }
-      }
-      heights = nextHeights;
-      velocities = nextVelocities;
+      [heights, velocities] = advanceWaveField(heights, velocities, 1);
     }
 
     const restoredMean =
       heights.reduce((sum, height) => sum + height, 0) / cellCount;
     expect(Math.abs(restoredMean)).toBeLessThan(0.01);
+  });
+
+  test("decays a cleared ripple at the same real-time rate on any refresh rate", () => {
+    const resolution = WAVE_SIMULATION_CONFIG.resolution;
+
+    // The zero-sum velocity wavelet a gem clear injects, not a height bump —
+    // a non-zero-mean seed would excite a mean mode clears never produce.
+    const seedRipple = () => {
+      const velocities = new Float64Array(resolution * resolution);
+      const center = 0.5;
+      const radius = 0.036;
+      const profile = (column, row) => {
+        const offsetX =
+          ((Math.min(resolution - 1, Math.max(0, column)) + 0.5) / resolution -
+            center) /
+          radius;
+        const offsetY =
+          ((Math.min(resolution - 1, Math.max(0, row)) + 0.5) / resolution -
+            center) /
+          radius;
+        const distanceSquared = offsetX * offsetX + offsetY * offsetY;
+        return distanceSquared >= 4 ? 0 : Math.exp(-distanceSquared * 2.4);
+      };
+      for (let row = 0; row < resolution; row += 1) {
+        for (let column = 0; column < resolution; column += 1) {
+          velocities[row * resolution + column] =
+            WAVE_SIMULATION_CONFIG.impulseAmplitude *
+            (4 * profile(column, row) -
+              profile(column - 1, row) -
+              profile(column + 1, row) -
+              profile(column, row - 1) -
+              profile(column, row + 1));
+        }
+      }
+      return [new Float64Array(resolution * resolution), velocities];
+    };
+
+    // Drives the shipped accumulator: each display frame banks 60/displayHz
+    // reference frames and spends whole substeps, carrying the remainder.
+    const simulateSeconds = (seconds, displayHz) => {
+      let [heights, velocities] = seedRipple();
+      let pendingFrames = 0;
+      let substepsRun = 0;
+      for (let frame = 0; frame < Math.round(seconds * displayHz); frame += 1) {
+        pendingFrames = resolveWaveDeltaFrames(pendingFrames + 60 / displayHz);
+        const substepCount = resolveWaveSubstepCount(pendingFrames);
+        pendingFrames -=
+          substepCount * WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames;
+        for (let substep = 0; substep < substepCount; substep += 1) {
+          [heights, velocities] = advanceWaveField(
+            heights,
+            velocities,
+            WAVE_SIMULATION_CONFIG.maximumSubstepDeltaFrames,
+          );
+        }
+        substepsRun += substepCount;
+      }
+      return { energy: fieldEnergy(heights, velocities), substepsRun };
+    };
+
+    const seedEnergy = fieldEnergy(...seedRipple());
+    const rates = [60, 90, 120, 144].map((displayHz) => ({
+      displayHz,
+      ...simulateSeconds(6, displayHz),
+    }));
+
+    for (const rate of rates) {
+      // The ripple must actually settle, not merely settle identically.
+      expect(rate.energy).toBeLessThan(seedEnergy / 20);
+      // Same real time spends the same substeps, give or take the one still
+      // banked when the run ends.
+      expect(
+        Math.abs(rate.substepsRun - rates[0].substepsRun),
+      ).toBeLessThanOrEqual(1);
+      expect(rate.energy / rates[0].energy).toBeGreaterThan(0.99);
+      expect(rate.energy / rates[0].energy).toBeLessThan(1.01);
+    }
+  });
+
+  test("damps ripple velocity to under 1% within six seconds", () => {
+    const decayPerSecond = WAVE_SIMULATION_CONFIG.velocityDampingPerFrame ** 60;
+
+    expect(decayPerSecond ** 6).toBeLessThan(0.01);
   });
 });
 

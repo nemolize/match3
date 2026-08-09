@@ -7,14 +7,18 @@ transparent DOM grid for pointer, keyboard, focus, and accessibility semantics.
 ## Render graph
 
 Each frame is submitted as one command buffer with four ordered render passes.
-When motion is enabled, they are preceded by a wave-simulation stage of one to
-three compute substep passes:
+When motion is enabled, they are preceded by a wave-simulation stage of zero to
+`MAX_WAVE_SUBSTEPS` compute substep passes:
 
 1. `waveSimulation` advances persistent 64x64 ping-pong wave textures. Gem
-   clears inject cell-centered, zero-sum velocity wavelets, and bounded substeps
-   preserve stability without dropping elapsed time. A weak restoring force
-   returns the mean surface height to zero instead of allowing repeated clears
-   or accumulated numerical error to shift the entire surface.
+   clears inject cell-centered, zero-sum velocity wavelets. Elapsed time
+   accumulates and is spent in fixed `maximumSubstepDeltaFrames` steps, so a
+   substep advances the same amount on any refresh rate and the wave decays at
+   the same real-time rate on a 60Hz and a 120Hz display; a frame too short to
+   fill one step runs none and carries the remainder (along with any pending
+   clear impulses) into the next. A weak restoring force returns the mean
+   surface height to zero instead of allowing repeated clears or accumulated
+   numerical error to shift the entire surface.
 2. `backgroundCaustics` refracts the sand through the simulated wave height and
    normals, applies depth-modulated Beer-Lambert extinction, single scattering,
    and caustics, then blends a reflected sky using dielectric Fresnel into

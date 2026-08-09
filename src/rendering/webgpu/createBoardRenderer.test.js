@@ -23,9 +23,10 @@ const environment = (gpu) => ({
 
 describe("WebGPU renderer initialization", () => {
   test("splits delayed wave frames into stable substeps without dropping time", () => {
-    expect(resolveWaveSubstepCount(1)).toBe(1);
-    expect(resolveWaveSubstepCount(2)).toBe(2);
-    expect(resolveWaveSubstepCount(3)).toBe(3);
+    expect(resolveWaveSubstepCount(0.4)).toBe(0);
+    expect(resolveWaveSubstepCount(0.5)).toBe(1);
+    expect(resolveWaveSubstepCount(1)).toBe(2);
+    expect(resolveWaveSubstepCount(3)).toBe(6);
     expect(resolveWaveDeltaFrames(4)).toBe(3);
   });
 

@@ -110,7 +110,7 @@ pnpm run lint:typecheck
 Deployment is handled by `.github/workflows/deploy.yml`:
 
 - Push to `main` deploys to production (`wrangler deploy`).
-- Pull requests upload a version of the same Worker (`wrangler versions upload`); the version URL is posted as a sticky PR comment.
+- Pull requests and manual runs upload a version of the same Worker (`wrangler versions upload`) without deploying it; on a pull request the version URL is posted as a sticky comment.
 
 The repository secret `CLOUDFLARE_API_TOKEN` is an account-owned Cloudflare token with the `Individual Workers Editor` permission scoped to the `match3` Worker only (**Specified Workers**, **Editor** role). A Worker-scoped token cannot create a Worker or other resources, so create anything new once with a broader token.
 

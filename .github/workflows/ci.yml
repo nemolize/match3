@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: nemolize/actions/setup@5d31663b9013a671ff8fe8b84900a88b9878f0c1 # v1.5.0
       - run: pnpm run lint
 
@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: nemolize/actions/setup@5d31663b9013a671ff8fe8b84900a88b9878f0c1 # v1.5.0
       - run: pnpm run test
 
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: nemolize/actions/setup@5d31663b9013a671ff8fe8b84900a88b9878f0c1 # v1.5.0
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e
